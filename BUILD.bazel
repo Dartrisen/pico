@@ -1,0 +1,6 @@
+cc_binary(
+    name = "main",
+    srcs = ["main.cpp"],
+    deps = ["//block:particle"],
+    copts = ["-std=c++17"],
+)

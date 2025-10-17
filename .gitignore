@@ -39,3 +39,9 @@
 
 # debug information files
 *.dwo
+
+# Bazel output directories
+bazel-*
+
+# IDE-specific settings
+.vscode/

@@ -1,0 +1,8 @@
+cc_library(
+    name = "particle",
+    hdrs = [
+        "particle_block.hpp",
+        "particle_system.hpp",
+    ],
+    visibility = ["//visibility:public"],
+)
