@@ -1,0 +1,8 @@
+cc_library(
+    name = "particle",
+    hdrs = glob(["particle/*.inl"]),
+    #strip_include_prefix = "src",
+    include_prefix = "",
+    copts = ["-O3", "-march=native"],
+    visibility = ["//visibility:public"],
+)
