@@ -1,8 +1,7 @@
 cc_library(
     name = "pic",
     deps = [
-        "//include:particle",
-        "//src:particle",
+        "//particle:particle",
     ],
     visibility = ["//visibility:public"],
 )

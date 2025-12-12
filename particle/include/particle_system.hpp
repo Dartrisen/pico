@@ -38,4 +38,4 @@ private:
     ParticleBlock<BLOCK_SIZE>* blocks_ = nullptr;
 };
 
-#include "src/particle/particle_system.inl"
+#include "particle/src/particle_system.inl"

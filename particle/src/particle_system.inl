@@ -4,7 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "include/particle/particle_system.hpp"
+#include "particle/include/particle_system.hpp"
 
 template <size_t BLOCK_SIZE>
 ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles)
