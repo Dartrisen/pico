@@ -3,9 +3,10 @@
 
 template <size_t BLOCK_SIZE>
 struct ParticleBlock {
-    float posX[BLOCK_SIZE];
-    float momX[BLOCK_SIZE];
-    float weight[BLOCK_SIZE];
+    alignas(64) float position_x[BLOCK_SIZE];
+    alignas(64) float momentum_x[BLOCK_SIZE];
+    alignas(64) float weight[BLOCK_SIZE];
+    alignas(64) float mass[BLOCK_SIZE];
 
     uint16_t activeCount = 0;
 };

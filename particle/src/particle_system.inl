@@ -55,7 +55,7 @@ void ParticleSystem<BLOCK_SIZE>::update_positions(float dt) {
 
         for (size_t i = 0; i < cnt; ++i) {
             const float w = blk.weight[i];
-            blk.posX[i] += blk.momX[i] * dt * w;
+            blk.position_x[i] += blk.momentum_x[i] * dt * w;
         }
 
         remaining -= cnt;
