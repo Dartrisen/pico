@@ -5,12 +5,20 @@
 
 #include "particle_block.hpp"
 
+
 constexpr size_t CACHE_LINE = 64;
+
+enum ParticleValue {
+    mass,
+    charge,
+    weight
+};
 
 template <size_t BLOCK_SIZE>
 class ParticleSystem {
 public:
     ParticleSystem(size_t maxParticles);
+    explicit ParticleSystem(size_t maxParticles, float charge, float mass);
     ~ParticleSystem();
 
     void set_active(size_t n);
@@ -22,20 +30,18 @@ public:
     size_t max_particles() const;
     size_t active_particles() const;
 
-    ParticleBlock<BLOCK_SIZE>* Blocks();
+    particle::ParticleBlock<BLOCK_SIZE>* Blocks();
+    void set_block_value(particle::ParticleBlock<BLOCK_SIZE>& block, ParticleValue value);
 
     ParticleSystem(const ParticleSystem&) = delete;
     ParticleSystem& operator=(const ParticleSystem&) = delete;
 
 private:
-    float charge_ = -1.0f;
-    float mass_ = 1.0f;
-
     size_t maxParticles_;
     size_t numBlocks_;
     size_t activeParticles_ = 0;
 
-    ParticleBlock<BLOCK_SIZE>* blocks_ = nullptr;
+    particle::ParticleBlock<BLOCK_SIZE>* blocks_ = nullptr;
 };
 
 #include "particle/src/particle_system.inl"

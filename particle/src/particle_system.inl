@@ -1,4 +1,5 @@
 #include <new>
+#include <span>
 #include <cstring>
 #include <algorithm>
 #include <iostream>
@@ -6,6 +7,9 @@
 
 #include "particle/include/particle_system.hpp"
 
+/**
+ * @brief Construct ParticleSystem using default mass and charge values
+ */
 template <size_t BLOCK_SIZE>
 ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles)
   : maxParticles_(maxParticles),
@@ -13,10 +17,10 @@ ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles)
 {
     if (numBlocks_ == 0) throw std::bad_alloc();
 
-    const size_t blocksBytes = numBlocks_ * sizeof(ParticleBlock<BLOCK_SIZE>);
+    const size_t blocksBytes = numBlocks_ * sizeof(particle::ParticleBlock<BLOCK_SIZE>);
 
     // aligned allocation for blocks_ (raw memory)
-    blocks_ = static_cast<ParticleBlock<BLOCK_SIZE>*>(
+    blocks_ = static_cast<particle::ParticleBlock<BLOCK_SIZE>*>(
         ::operator new[](blocksBytes, std::align_val_t(CACHE_LINE))
     );
 
@@ -25,6 +29,24 @@ ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles)
 
     // debug/info
     std::cout << "Allocated " << numBlocks_ << " blocks (" << blocksBytes << " bytes).\n";
+
+    std::span<particle::ParticleBlock<BLOCK_SIZE>> blocksSpan(blocks_, numBlocks_);
+    for (auto& block : blocksSpan) {
+        std::fill(block.mass.begin(), block.mass.end(), 1.0f);
+        std::fill(block.charge.begin(), block.charge.end(), -1.0f);
+        std::fill(block.weight.begin(), block.weight.end(), 1.0f);
+    }
+}
+
+template <size_t BLOCK_SIZE>
+void ParticleSystem<BLOCK_SIZE>::set_block_value(particle::ParticleBlock<BLOCK_SIZE>& block, ParticleValue value) {
+    if (value == ParticleValue::mass) {
+        std::fill(block.mass.begin(), block.mass.end(), mass);
+    } else if (value == ParticleValue::charge) {
+        std::fill(block.charge.begin(), block.charge.end(), charge);
+    } else if (value == ParticleValue::weight) {
+        std::fill(block.weight.begin(), block.weight.end(), weight);
+    }
 }
 
 template <size_t BLOCK_SIZE>
@@ -75,4 +97,4 @@ template <size_t BLOCK_SIZE>
 size_t ParticleSystem<BLOCK_SIZE>::active_particles() const { return activeParticles_; }
 
 template <size_t BLOCK_SIZE>
-ParticleBlock<BLOCK_SIZE>* ParticleSystem<BLOCK_SIZE>::Blocks() { return blocks_; }
+particle::ParticleBlock<BLOCK_SIZE>* ParticleSystem<BLOCK_SIZE>::Blocks() { return blocks_; }
