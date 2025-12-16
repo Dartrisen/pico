@@ -70,12 +70,12 @@ int main() {
         // approximate memory per particle: size of a block divided by its B
         double mem_per_particle = 0.0;
         switch (B) {
-            case 8:   mem_per_particle = double(sizeof(ParticleBlock<8>)) / 8.0; break;
-            case 16:  mem_per_particle = double(sizeof(ParticleBlock<16>)) / 16.0; break;
-            case 32:  mem_per_particle = double(sizeof(ParticleBlock<32>)) / 32.0; break;
-            case 64:  mem_per_particle = double(sizeof(ParticleBlock<64>)) / 64.0; break;
-            case 128: mem_per_particle = double(sizeof(ParticleBlock<128>)) / 128.0; break;
-            case 256: mem_per_particle = double(sizeof(ParticleBlock<256>)) / 256.0; break;
+            case 8:   mem_per_particle = double(sizeof(particle::ParticleBlock<8>)) / 8.0; break;
+            case 16:  mem_per_particle = double(sizeof(particle::ParticleBlock<16>)) / 16.0; break;
+            case 32:  mem_per_particle = double(sizeof(particle::ParticleBlock<32>)) / 32.0; break;
+            case 64:  mem_per_particle = double(sizeof(particle::ParticleBlock<64>)) / 64.0; break;
+            case 128: mem_per_particle = double(sizeof(particle::ParticleBlock<128>)) / 128.0; break;
+            case 256: mem_per_particle = double(sizeof(particle::ParticleBlock<256>)) / 256.0; break;
             default: break;
         }
 
