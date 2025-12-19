@@ -1,0 +1,8 @@
+cc_library(
+    name = "field",
+    hdrs = glob(["include/*.hpp", "src/*.inl"]),
+    deps = ["//grid:grid"],
+    include_prefix = "",
+    copts = ["-O3", "-march=native"],
+    visibility = ["//visibility:public"],
+)
