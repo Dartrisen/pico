@@ -18,18 +18,39 @@ public:
     field::FieldBlock<BLOCK_SIZE>& block(size_t b) noexcept;
     const field::FieldBlock<BLOCK_SIZE>& block(size_t b) const noexcept;
 
-    // Global linear access (slow, but useful for debugging)
+    // Global linear access to field x-component
     float& field_x(size_t idx) {
+        auto [b, i] = locate(idx);
+        return blocks_[b].field_x[i];
+    }
+
+    const float& field_x(size_t idx) const {
         auto [b, i] = locate(idx);
         return blocks_[b].field_x[i];
     }
 
     // Fast block iteration
     template<typename Func>
+    void for_each_block(Func&& f) const {
+        for (size_t b = 0; b < num_blocks_; ++b)
+            f(blocks_[b], b);
+    }
+
+    template<typename Func>
     void for_each_block(Func&& f) {
         for (size_t b = 0; b < num_blocks_; ++b)
             f(blocks_[b], b);
     }
+
+    void set_fields(float value) {
+        for_each_block([value](auto& block, size_t){
+            for (size_t i = 0; i < BLOCK_SIZE; ++i)
+                block.field_x[i] = value;
+        });
+    }
+
+    float& operator[](size_t idx) { return field_x(idx); }
+    const float& operator[](size_t idx) const { return field_x(idx); }
 
     size_t num_blocks() const noexcept { return num_blocks_; }
     const Grid& grid() const noexcept { return grid_; }

@@ -5,20 +5,34 @@
 namespace field {
 
 /**
+ * @brief Enum for field components
+ */
+enum class FieldComp : uint8_t {
+    X = 0, Y = 1, Z = 2
+};
+
+/**
  * @brief Cache-aligned, SIMD-friendly field block using Structure-of-Arrays
  * @tparam BLOCK_SIZE Number of fields per block (must be multiple of 8)
  */
 template <size_t BLOCK_SIZE>
 struct FieldBlock {
-    static_assert(BLOCK_SIZE % 8 == 0, "BLOCK_SIZE must be multiple of 8 for AVX");
+    std::array<float, BLOCK_SIZE> field_x;
+    std::array<float, BLOCK_SIZE> field_y;
+    std::array<float, BLOCK_SIZE> field_z;
 
-    static constexpr size_t size_x = BLOCK_SIZE;
+    auto& component(FieldComp c) noexcept {
+        switch (c) {
+            case FieldComp::X: return field_x;
+            case FieldComp::Y: return field_y;
+            case FieldComp::Z: return field_z;
+        }
+        __builtin_unreachable();
+    }
 
-    // Field components
-    alignas(64) std::array<float, size_x> field_x;
-    alignas(64) std::array<float, size_x> field_y;
-    alignas(64) std::array<float, size_x> field_z;
-
+    const auto& component(FieldComp c) const noexcept {
+        return const_cast<FieldBlock*>(this)->component(c);
+    }
 };
 
 } // namespace field
