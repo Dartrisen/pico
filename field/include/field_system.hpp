@@ -12,57 +12,73 @@
 template<size_t BLOCK_SIZE>
 class FieldSystem {
 public:
-    FieldSystem(const Grid& grid);
+    explicit FieldSystem(const Grid& grid);
 
-    // Accessors
+    // ---- block access (FAST PATH) ----
     field::FieldBlock<BLOCK_SIZE>& block(size_t b) noexcept;
     const field::FieldBlock<BLOCK_SIZE>& block(size_t b) const noexcept;
 
-    // Global linear access to field x-component
-    float& field_x(size_t idx) {
-        auto [b, i] = locate(idx);
-        return blocks_[b].field_x[i];
+    size_t num_blocks() const noexcept { return blocks_.size(); }
+    const Grid& grid() const noexcept { return grid_; }
+
+    // ---- scalar access (SLOW PATH) ----
+    float& field(field::FieldComp c, size_t idx) noexcept {
+        const size_t b = idx / BLOCK_SIZE;
+        const size_t i = idx % BLOCK_SIZE;
+        return blocks_[b].component(c)[i];
     }
 
-    const float& field_x(size_t idx) const {
-        auto [b, i] = locate(idx);
-        return blocks_[b].field_x[i];
+    const float& field(field::FieldComp c, size_t idx) const noexcept {
+        return const_cast<FieldSystem*>(this)->field(c, idx);
     }
 
-    // Fast block iteration
+    // Backward compatibility helpers
+    float& field_x(size_t idx) noexcept {
+        return field(field::FieldComp::X, idx);
+    }
+
+    const float& field_x(size_t idx) const noexcept {
+        return field(field::FieldComp::X, idx);
+    }
+
+    float& operator[](size_t idx) noexcept {
+        return field_x(idx);
+    }
+
+    const float& operator[](size_t idx) const noexcept {
+        return field_x(idx);
+    }
+
+    // ---- block iteration ----
     template<typename Func>
-    void for_each_block(Func&& f) const {
-        for (size_t b = 0; b < num_blocks_; ++b)
+    void for_each_block(Func&& f) noexcept {
+        for (size_t b = 0; b < blocks_.size(); ++b)
             f(blocks_[b], b);
     }
 
     template<typename Func>
-    void for_each_block(Func&& f) {
-        for (size_t b = 0; b < num_blocks_; ++b)
+    void for_each_block(Func&& f) const noexcept {
+        for (size_t b = 0; b < blocks_.size(); ++b)
             f(blocks_[b], b);
     }
 
-    void set_fields(float value) {
-        for_each_block([value](auto& block, size_t){
-            for (size_t i = 0; i < BLOCK_SIZE; ++i)
-                block.field_x[i] = value;
+    // ---- bulk operations ----
+    void set_fields(field::FieldComp c, float value) noexcept {
+        for_each_block([&](auto& blk, size_t) {
+            std::fill(blk.component(c).begin(),
+                      blk.component(c).end(),
+                      value);
         });
     }
 
-    float& operator[](size_t idx) { return field_x(idx); }
-    const float& operator[](size_t idx) const { return field_x(idx); }
-
-    size_t num_blocks() const noexcept { return num_blocks_; }
-    const Grid& grid() const noexcept { return grid_; }
+    // backward-compatible helper
+    void set_field_x(float value) noexcept {
+        set_fields(field::FieldComp::X, value);
+    }
 
 private:
     const Grid& grid_;
-    size_t num_blocks_;
     std::vector<field::FieldBlock<BLOCK_SIZE>> blocks_;
-
-    static constexpr std::pair<size_t,size_t> locate(size_t linear_idx) noexcept {
-        return { linear_idx / BLOCK_SIZE, linear_idx % BLOCK_SIZE };
-    }
 };
 
 #include "field/src/field_system.inl"
