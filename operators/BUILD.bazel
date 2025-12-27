@@ -1,0 +1,13 @@
+cc_library(
+    name = "operators",
+    hdrs = glob(["include/*.hpp", "src/*.inl"]),
+    deps = [
+        "//grid:grid",
+        "//field:field",
+        "//particle:particle"
+    ],
+    includes = ["include"],
+    include_prefix = "",
+    copts = ["-O3", "-march=native"],
+    visibility = ["//visibility:public"],
+)
