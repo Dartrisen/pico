@@ -31,7 +31,12 @@ struct FieldBlock {
     }
 
     const auto& component(FieldComp c) const noexcept {
-        return const_cast<FieldBlock*>(this)->component(c);
+        switch (c) {
+            case FieldComp::X: return field_x;
+            case FieldComp::Y: return field_y;
+            case FieldComp::Z: return field_z;
+        }
+        __builtin_unreachable();
     }
 };
 

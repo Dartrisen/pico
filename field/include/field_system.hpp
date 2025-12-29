@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <cassert>
 
 #include "grid.hpp"
 #include "field_block.hpp"
@@ -23,13 +24,17 @@ public:
 
     // ---- scalar access (SLOW PATH) ----
     float& field(field::FieldComp c, size_t idx) noexcept {
+        assert(idx < blocks_.size() * BLOCK_SIZE);
         const size_t b = idx / BLOCK_SIZE;
         const size_t i = idx % BLOCK_SIZE;
         return blocks_[b].component(c)[i];
     }
 
     const float& field(field::FieldComp c, size_t idx) const noexcept {
-        return const_cast<FieldSystem*>(this)->field(c, idx);
+        assert(idx < blocks_.size() * BLOCK_SIZE);
+        const size_t b = idx / BLOCK_SIZE;
+        const size_t i = idx % BLOCK_SIZE;
+        return blocks_[b].component(c)[i];
     }
 
     // Backward compatibility helpers
@@ -77,7 +82,7 @@ public:
     }
 
 private:
-    const Grid& grid_;
+    Grid grid_;
     std::vector<field::FieldBlock<BLOCK_SIZE>> blocks_;
 };
 
