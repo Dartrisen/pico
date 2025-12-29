@@ -4,7 +4,9 @@
 #include <iostream>
 
 #include "particle_block.hpp"
-
+#include "field_system.hpp"
+#include "field_em.hpp"
+#include "grid.hpp"
 
 constexpr size_t CACHE_LINE = 64;
 
@@ -13,6 +15,15 @@ enum ParticleValue {
     charge,
     weight
 };
+
+template <class Shape, size_t BLOCK_SIZE>
+struct FieldGather;
+
+template <size_t BLOCK_SIZE>
+struct BorisPusher;
+
+template <class Shape, size_t BLOCK_SIZE>
+struct CurrentDeposit;
 
 template <size_t BLOCK_SIZE>
 class ParticleSystem {
@@ -24,6 +35,7 @@ public:
     void set_active(size_t n);
 
     void update_positions(float dt);
+    void advance(EMFields<BLOCK_SIZE>& fields, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt);
 
     static constexpr size_t block_size();
     size_t num_blocks() const;

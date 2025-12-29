@@ -1,8 +1,14 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <array>
+
 
 namespace particle {
+
+enum class MomentumComp : uint8_t {
+    X = 0, Y = 1, Z = 2
+};
 
 /**
  * @brief Cache-aligned, SIMD-friendly particle block using Structure-of-Arrays
@@ -14,8 +20,13 @@ struct ParticleBlock {
 
     static constexpr size_t size_x = BLOCK_SIZE;
 
+    // Particle positions
     alignas(64) std::array<float, size_x> position_x;
+
+    // Particle momenta
     alignas(64) std::array<float, size_x> momentum_x;
+    alignas(64) std::array<float, size_x> momentum_y;
+    alignas(64) std::array<float, size_x> momentum_z;
 
     // Particle properties
     alignas(64) std::array<float, size_x> weight;
@@ -51,6 +62,20 @@ struct ParticleBlock {
         weight[index]     = weight[last];
         mass[index]       = mass[last];
         charge[index]     = charge[last];
+    }
+
+    auto& component(MomentumComp c) noexcept {
+        switch (c) {
+            case MomentumComp::X: return momentum_x;
+            case MomentumComp::Y: return momentum_y;
+            case MomentumComp::Z: return momentum_z;
+        }
+        __builtin_unreachable();
+    }
+
+public:
+    const auto& get_momentum(MomentumComp c) const noexcept {
+        return const_cast<ParticleBlock*>(this)->component(c);
     }
 };
 

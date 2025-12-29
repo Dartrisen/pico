@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "particle/include/particle_system.hpp"
+#include "operators.hpp"
 
 /**
  * @brief Construct ParticleSystem using default mass and charge values
@@ -30,8 +31,7 @@ ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles)
     // debug/info
     std::cout << "Allocated " << numBlocks_ << " blocks (" << blocksBytes << " bytes).\n";
 
-    std::span<particle::ParticleBlock<BLOCK_SIZE>> blocksSpan(blocks_, numBlocks_);
-    for (auto& block : blocksSpan) {
+    for (auto& block : std::span(blocks_, numBlocks_)) {
         std::fill(block.mass.begin(), block.mass.end(), 1.0f);
         std::fill(block.charge.begin(), block.charge.end(), -1.0f);
         std::fill(block.weight.begin(), block.weight.end(), 1.0f);
@@ -81,6 +81,25 @@ void ParticleSystem<BLOCK_SIZE>::update_positions(float dt) {
         }
 
         remaining -= cnt;
+    }
+}
+
+template <size_t BLOCK_SIZE>
+void ParticleSystem<BLOCK_SIZE>::advance(EMFields<BLOCK_SIZE>& fields,
+                                         FieldSystem<BLOCK_SIZE>& J,
+                                         const Grid& grid,
+                                         float dt)
+{
+    FieldGather<CIC, BLOCK_SIZE> gather;
+    BorisPusher<BLOCK_SIZE> boris;
+    CurrentDeposit<CIC, BLOCK_SIZE> deposit;
+
+    for (auto& block : std::span(blocks_, numBlocks_)) {
+        FieldScratch<BLOCK_SIZE> scratch;
+
+        gather(block, fields, grid, scratch);
+        boris(block, scratch, dt);
+        deposit(block, J, grid, dt);
     }
 }
 
