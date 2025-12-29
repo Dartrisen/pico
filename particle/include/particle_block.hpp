@@ -73,9 +73,13 @@ struct ParticleBlock {
         __builtin_unreachable();
     }
 
-public:
-    const auto& get_momentum(MomentumComp c) const noexcept {
-        return const_cast<ParticleBlock*>(this)->component(c);
+    const auto& component(MomentumComp c) const noexcept {
+        switch (c) {
+            case MomentumComp::X: return momentum_x;
+            case MomentumComp::Y: return momentum_y;
+            case MomentumComp::Z: return momentum_z;
+        }
+        __builtin_unreachable();
     }
 };
 
