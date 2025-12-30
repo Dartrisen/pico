@@ -67,7 +67,7 @@ void BorisPusher<BLOCK_SIZE>::operator()(
 {
     const float half_dt = 0.5f * dt;
 
-    for (size_t p = 0; p < pb.size_x; ++p) {
+    for (size_t p = 0; p < pb.activeCount; ++p) {
 
         // --- half electric kick ---
         float ux = pb.momentum_x[p] + half_dt * fs.Ex[p];
