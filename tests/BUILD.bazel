@@ -1,0 +1,10 @@
+cc_test(
+    name = "test_pic_core",
+    srcs = ["test_pic_core.cpp"],
+    deps = [
+        "//field",
+        "//particle",
+        "//grid",
+        "//operators",
+    ],
+)
