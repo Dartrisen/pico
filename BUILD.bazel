@@ -2,6 +2,9 @@ cc_library(
     name = "pic",
     deps = [
         "//particle:particle",
+        "//field:field",
+        "//operators:operators",
+        "//grid:grid",
     ],
     visibility = ["//visibility:public"],
 )
