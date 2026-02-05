@@ -25,8 +25,7 @@ ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles)
         ::operator new[](blocksBytes, std::align_val_t(CACHE_LINE))
     );
 
-    // zero-initialize blocks memory (ParticleBlock is POD-like: only floats/ints)
-    std::memset(blocks_, 0, blocksBytes);
+    std::fill(blocks_, blocks_ + numBlocks_, particle::ParticleBlock<BLOCK_SIZE>{});
 
     // debug/info
     std::cout << "Allocated " << numBlocks_ << " blocks (" << blocksBytes << " bytes).\n";
