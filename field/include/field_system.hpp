@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cassert>
+#include <vector>
 
 #include "grid.hpp"
 #include "field_block.hpp"
