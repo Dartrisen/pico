@@ -4,6 +4,7 @@ cc_library(
     name = "kernels",
     deps = [
         "//kernels/field",
+        "//kernels/pusher",
     ],
     visibility = ["//visibility:public"],
 )

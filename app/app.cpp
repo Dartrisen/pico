@@ -5,10 +5,11 @@
 
 #include "engine/PICEngine.hpp"
 #include "engine/modules/field/YeeMaxwell.hpp"
+#include "engine/modules/pusher/BorisPusher.hpp"
 
-#include "grid/include/grid.hpp"
+#include "data/grid/include/grid.hpp"
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     // ---- runtime config ----
     Grid grid(256, 0.1);
@@ -20,26 +21,23 @@ int main(int argc, char** argv)
 
     // ---- compile-time modules choices ----
     using Field = pico::modules::field::YeeMaxwell<BS>;
-    // using Push  = module::push::BorisPusher<BS>;
+    using Push = pico::modules::pusher::BorisPusher<BS>;
     // using Coll  = module::collision::NoCollision;
     // using Dep   = module::deposit::Esirkepov<BS>;
 
     using EngineT = PICEngine<
         Field,
-        // Push,
+        Push,
         // Coll,
         // Dep,
-        BS
-    >;
+        BS>;
 
     // ---- bridge abstraction: runtime → compile-time ----
-    auto engine =
-        std::make_unique<EngineWrapper<EngineT>>(EngineT{grid});
+    auto engine = std::make_unique<EngineWrapper<EngineT>>(EngineT{grid});
 
     // ---- high-level app ----
     PICApp app(std::move(engine), dt);
     app.run(nsteps);
     std::cout << "Simulation completed successfully." << std::endl;
-
     return 0;
 }
