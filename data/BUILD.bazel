@@ -1,0 +1,13 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "data",
+    deps = [
+        "//data/field",
+        "//data/grid",
+        "//data/particle"
+    ],
+    include_prefix = "",
+    copts = ["-O3", "-march=native"],
+    visibility = ["//visibility:public"],
+)
