@@ -7,7 +7,7 @@ cc_library(
     ],
     deps = [
         "//kernels:kernels",
-        "//field:field",
+        "//data:data",
     ],
     visibility = ["//engine:__pkg__", "//visibility:public"],
 )

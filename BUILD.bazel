@@ -3,10 +3,9 @@ load("@rules_cc//cc:defs.bzl", "cc_library", "cc_binary")
 cc_library(
     name = "pic",
     deps = [
-        "//particle:particle",
-        "//field:field",
-        "//operators:operators",
-        "//grid:grid",
+        "//data/particle:particle",
+        "//data/field:field",
+        "//data/grid:grid",
     ],
     visibility = ["//visibility:public"],
 )

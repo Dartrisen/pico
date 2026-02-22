@@ -6,7 +6,7 @@ cc_library(
         "maxwell_yee.hpp",
     ],
     deps = [
-        "//field:field",
+        "//data/field:field",
     ],
     visibility = ["//visibility:public"],
 )
