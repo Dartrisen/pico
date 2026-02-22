@@ -1,0 +1,14 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "pusher",
+    hdrs = [
+        "BorisPusher.hpp",
+    ],
+    deps = [
+        "//data/particle:particle",
+        "//data/field:field",
+        "//kernels:kernels",
+    ],
+    visibility = ["//engine:__pkg__", "//visibility:public"],
+)
