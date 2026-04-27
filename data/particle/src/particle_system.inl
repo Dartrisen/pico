@@ -25,7 +25,7 @@ namespace particle
         blocks_ = static_cast<particle::ParticleBlock<BLOCK_SIZE> *>(
             ::operator new[](blocksBytes, std::align_val_t(CACHE_LINE)));
 
-        std::fill(blocks_, blocks_ + numBlocks_, particle::ParticleBlock<BLOCK_SIZE>{});
+        std::uninitialized_value_construct_n(blocks_, numBlocks_);
 
         // debug/info
         std::cout << "Allocated " << numBlocks_ << " blocks (" << blocksBytes << " bytes).\n";
@@ -56,9 +56,11 @@ namespace particle
     {
         if (this != &other)
         {
-            // free current memory
             if (blocks_)
+            {
+                std::destroy_n(blocks_, numBlocks_);
                 ::operator delete[](blocks_, std::align_val_t(CACHE_LINE));
+            }
 
             maxParticles_ = other.maxParticles_;
             numBlocks_ = other.numBlocks_;
@@ -95,6 +97,9 @@ namespace particle
     {
         if (blocks_)
         {
+            // destroy objects first (calls destructors properly)
+            std::destroy_n(blocks_, numBlocks_);
+            // free aligned memory
             ::operator delete[](blocks_, std::align_val_t(CACHE_LINE));
             blocks_ = nullptr;
         }

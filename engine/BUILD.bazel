@@ -10,6 +10,7 @@ cc_library(
         "//engine/modules",
         "//engine/modules/field",
         "//engine/modules/pusher",
+        "//engine/modules/gather",
     ],
     visibility = ["//visibility:public"],
 )

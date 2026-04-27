@@ -24,6 +24,12 @@ namespace pico::modules
         { c.apply(p, dt) } -> std::same_as<void>;
     };
 
+    // Gather concept: map grid fields onto particles
+    template <class T, class ParticleSystem, class EMFields, class FieldScratch>
+    concept Gather = requires(T g, const ParticleSystem &p, const EMFields &f, const Grid &grid, FieldScratch &s) {
+        { g.gather(p, f, grid, s) } -> std::same_as<void>;
+    };
+
     // Current / charge deposition concept
     template <class T, class Particles, class Fields>
     concept Deposit = requires(T d, const Particles &p, Fields &f) {
