@@ -480,7 +480,7 @@ void benchmark_component_gather()
         {
             for (const auto& pb : particles)
             {
-                const auto& mom_x = pb.component(particle::MomentumComp::X);
+                const auto& mom_x = pb.component<particle::MomentumComp::X>();
                 for (size_t i = 0; i < pb.activeCount; ++i)
                 {
                     sum += mom_x[i];
@@ -506,9 +506,9 @@ void benchmark_component_gather()
         {
             for (const auto& pb : particles)
             {
-                const auto& mom_x = pb.component(particle::MomentumComp::X);
-                const auto& mom_y = pb.component(particle::MomentumComp::Y);
-                const auto& mom_z = pb.component(particle::MomentumComp::Z);
+                const auto& mom_x = pb.component<particle::MomentumComp::X>();
+                const auto& mom_y = pb.component<particle::MomentumComp::Y>();
+                const auto& mom_z = pb.component<particle::MomentumComp::Z>();
                 for (size_t i = 0; i < pb.activeCount; ++i)
                 {
                     sum += mom_x[i] + mom_y[i] + mom_z[i];
