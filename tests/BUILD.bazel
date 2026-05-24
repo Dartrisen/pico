@@ -1,3 +1,6 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
 cc_test(
     name = "test_pic_core",
     srcs = ["test_pic_core.cpp"],
@@ -7,4 +10,23 @@ cc_test(
         "//grid",
         "//operators",
     ],
+)
+cc_binary(
+    name = "benchmark_performance",
+    srcs = ["test_performance.cpp"],
+    deps = [
+        "//data",
+        "//kernels",
+    ],
+    copts = ["-O3", "-march=native", "-std=c++20"],
+)
+
+cc_test(
+    name = "test_performance",
+    srcs = ["test_performance.cpp"],
+    deps = [
+        "//data",
+        "//kernels",
+    ],
+    copts = ["-O3", "-march=native", "-std=c++20"],
 )
