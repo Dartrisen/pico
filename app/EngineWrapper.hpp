@@ -1,15 +1,16 @@
 #pragma once
-#include <memory>
 #include "IEngine.hpp"
 
+#include <memory>
 
-template<class EngineT>
-class EngineWrapper final : public IEngine {
+template <class EngineT>
+class EngineWrapper final : public IEngine
+{
 public:
-    explicit EngineWrapper(EngineT engine)
-        : engine_(std::move(engine)) {}
+    explicit EngineWrapper(EngineT engine) : engine_(std::move(engine)) {}
 
-    void advance(double dt) override {
+    void advance(double dt) override
+    {
         engine_.advance(dt);
     }
 

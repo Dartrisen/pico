@@ -1,12 +1,12 @@
 #pragma once
-#include <memory>
 #include "IEngine.hpp"
+
+#include <memory>
 
 class PICApp
 {
 public:
-    explicit PICApp(std::unique_ptr<IEngine> engine, double dt)
-        : engine_(std::move(engine)), dt_(dt) {}
+    explicit PICApp(std::unique_ptr<IEngine> engine, double dt) : engine_(std::move(engine)), dt_(dt) {}
 
     void run(int nsteps)
     {
@@ -19,5 +19,5 @@ public:
 
 private:
     std::unique_ptr<IEngine> engine_;
-    double dt_;
+    double                   dt_;
 };
