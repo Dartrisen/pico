@@ -9,16 +9,12 @@ namespace kernels::pusher
     template <size_t BLOCK_SIZE>
     struct BorisPusher
     {
-        static void push_block(
-            particle::ParticleBlock<BLOCK_SIZE> &pb,
-            const FieldScratch<BLOCK_SIZE> &fs,
-            float dt)
+        static void push_block(particle::ParticleBlock<BLOCK_SIZE>& pb, const FieldScratch<BLOCK_SIZE>& fs, float dt)
         {
             const float half_dt = 0.5f * dt;
 
             for (size_t p = 0; p < pb.activeCount; ++p)
             {
-
                 // --- half electric kick ---
                 float ux = pb.momentum_x[p] + half_dt * fs.Ex[p];
                 float uy = pb.momentum_y[p] + half_dt * fs.Ey[p];

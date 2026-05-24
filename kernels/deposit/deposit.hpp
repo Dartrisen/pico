@@ -4,30 +4,25 @@ namespace kernels::deposit
 {
     struct CIC
     {
-        static inline void weights(float xp, float dx, int &i0, float &w0, float &w1) noexcept
+        static inline void weights(float xp, float dx, int& i0, float& w0, float& w1) noexcept
         {
             float s = xp * (1.0f / dx);
-            i0 = static_cast<int>(s);
+            i0      = static_cast<int>(s);
             float f = s - i0;
-            w0 = 1.0f - f;
-            w1 = f;
+            w0      = 1.0f - f;
+            w1      = f;
         }
     };
 
     template <class Shape, size_t BLOCK_SIZE>
     struct CurrentDeposit
     {
-
-        static inline void deposit(
-            const particle::ParticleBlock<BLOCK_SIZE> &pb,
-            FieldSystem<BLOCK_SIZE> &J,
-            const Grid &grid,
-            float dt) const
+        static inline void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J,
+                                   const Grid& grid, float dt) const
         {
             for (size_t p = 0; p < pb.size_x; ++p)
             {
-
-                int i0;
+                int   i0;
                 float w0, w1;
 
                 Shape::weights(pb.momentum_x[p], grid.cell_size(), i0, w0, w1);

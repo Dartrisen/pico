@@ -21,15 +21,12 @@ namespace kernels::shapes
         static constexpr int S = SplineTraits<Order>::support;
 
         template <size_t BLOCK_SIZE>
-        static inline void gather1d(
-            const particle::ParticleBlock<BLOCK_SIZE> &pb,
-            const EMFields<BLOCK_SIZE> &fields,
-            const Grid &grid,
-            FieldScratch<BLOCK_SIZE> &scratch)
+        static inline void gather1d(const particle::ParticleBlock<BLOCK_SIZE>& pb, const EMFields<BLOCK_SIZE>& fields,
+                                    const Grid& grid, FieldScratch<BLOCK_SIZE>& scratch)
         {
             for (size_t p = 0; p < pb.activeCount; ++p)
             {
-                int i0;
+                int    i0;
                 double w[S];
                 SplineShape<Order>::weights(pb.position_x[p], grid.cell_size(), i0, w);
 
@@ -51,14 +48,10 @@ namespace kernels::shapes
             }
         }
 
-        static inline void interpolate(
-            const Vec3 &x,
-            const FieldGrid &grid,
-            Vec3 &E,
-            Vec3 &B)
+        static inline void interpolate(const Vec3& x, const FieldGrid& grid, Vec3& E, Vec3& B)
         {
             // 1D stub (x-direction only). For higher dimensions, split by axis.
-            int i0;
+            int    i0;
             double w[S];
             SplineShape<Order>::weights(x.x, grid.cell_size(), i0, w);
 
@@ -74,11 +67,7 @@ namespace kernels::shapes
             E = {ex, 0.0, 0.0};
             B = {bx, 0.0, 0.0};
         }
-        static inline void weights(
-            double x,
-            double h,
-            int &i0,
-            double (&w)[S])
+        static inline void weights(double x, double h, int& i0, double (&w)[S])
         {
             SplineShape<Order>::weights(x, h, i0, w);
         }

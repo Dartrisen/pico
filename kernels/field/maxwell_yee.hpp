@@ -6,11 +6,7 @@ namespace kernels::field
     template <size_t BLOCK_SIZE>
     struct MaxwellYeeKernel
     {
-
-        static inline void update_B(
-            EMFields<BLOCK_SIZE> &fields,
-            const Grid &grid,
-            float dt)
+        static inline void update_B(EMFields<BLOCK_SIZE>& fields, const Grid& grid, float dt)
         {
             const float dx_inv = 1.f / grid.cell_size();
 
@@ -21,11 +17,8 @@ namespace kernels::field
             }
         }
 
-        static inline void update_E(
-            EMFields<BLOCK_SIZE> &fields,
-            const FieldSystem<BLOCK_SIZE> &J,
-            const Grid &grid,
-            float dt)
+        static inline void update_E(EMFields<BLOCK_SIZE>& fields, const FieldSystem<BLOCK_SIZE>& J, const Grid& grid,
+                                    float dt)
         {
             const float dx_inv = 1.f / grid.cell_size();
 

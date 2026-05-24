@@ -10,11 +10,8 @@ namespace kernels::gather
     template <class Shape, size_t BLOCK_SIZE>
     struct FieldGather
     {
-        static inline void gather(
-            const particle::ParticleBlock<BLOCK_SIZE> &pb,
-            const EMFields<BLOCK_SIZE> &fields,
-            const Grid &grid,
-            FieldScratch<BLOCK_SIZE> &scratch)
+        static inline void gather(const particle::ParticleBlock<BLOCK_SIZE>& pb, const EMFields<BLOCK_SIZE>& fields,
+                                  const Grid& grid, FieldScratch<BLOCK_SIZE>& scratch)
         {
             scratch.clear();
 
@@ -23,7 +20,7 @@ namespace kernels::gather
 
             for (size_t p = 0; p < pb.activeCount; ++p)
             {
-                int i0;
+                int    i0;
                 double w[S];
 
                 Shape::weights(pb.position_x[p], grid.cell_size(), i0, w);
