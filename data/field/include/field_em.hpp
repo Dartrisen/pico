@@ -7,8 +7,7 @@ struct EMFields
     FieldSystem<BLOCK_SIZE> E;
     FieldSystem<BLOCK_SIZE> B;
 
-    EMFields(const Grid &grid)
-        : E(grid), B(grid) {}
+    EMFields(const Grid& grid) : E(grid), B(grid) {}
 };
 
 template <size_t BLOCK_SIZE>

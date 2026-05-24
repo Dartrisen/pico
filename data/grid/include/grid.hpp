@@ -1,6 +1,6 @@
 #pragma once
-#include <stdexcept>
 #include <iostream>
+#include <stdexcept>
 
 /**
  * @brief Represents a one-dimensional computational grid
@@ -46,6 +46,6 @@ public:
     }
 
 private:
-    int nx;
+    int    nx;
     double dx;
 };
