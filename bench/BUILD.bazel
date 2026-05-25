@@ -1,0 +1,76 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_binary")
+
+cc_library(
+    name = "bench_core",
+    hdrs = glob(["core/*.hpp"]),
+    copts = ["-O3", "-march=native", "-std=c++20"],
+    visibility = ["//bench:__subpackages__"],
+)
+
+cc_binary(
+    name = "bench_boris_push",
+    srcs = ["kernels/boris_push.cpp"],
+    deps = [
+        ":bench_core",
+        "//data",
+        "//kernels",
+    ],
+    copts = ["-O3", "-march=native", "-std=c++20"],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "bench_field_interp",
+    srcs = ["kernels/field_interp.cpp"],
+    deps = [
+        ":bench_core",
+        "//data",
+        "//kernels",
+    ],
+    copts = ["-O3", "-march=native", "-std=c++20"],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "bench_bandwidth",
+    srcs = ["memory/bandwidth.cpp"],
+    deps = [
+        ":bench_core",
+        "//data",
+    ],
+    copts = ["-O3", "-march=native", "-std=c++20"],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "bench_cache_scaling",
+    srcs = ["memory/cache_scaling.cpp"],
+    deps = [
+        ":bench_core",
+        "//data",
+    ],
+    copts = ["-O3", "-march=native", "-std=c++20"],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "bench_simd_efficiency",
+    srcs = ["simd/vectorization_efficiency.cpp"],
+    deps = [
+        ":bench_core",
+    ],
+    copts = ["-O3", "-march=native", "-std=c++20"],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "bench_full_pic",
+    srcs = ["system/full_pic.cpp"],
+    deps = [
+        ":bench_core",
+        "//data",
+        "//kernels",
+    ],
+    copts = ["-O3", "-march=native", "-std=c++20"],
+    visibility = ["//visibility:public"],
+)
