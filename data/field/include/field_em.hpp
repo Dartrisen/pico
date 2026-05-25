@@ -11,18 +11,10 @@ struct EMFields
 };
 
 template <size_t BLOCK_SIZE>
-struct FieldScratch
+struct alignas(64) FieldScratch
 {
-    alignas(64) std::array<float, BLOCK_SIZE> Ex, Ey, Ez;
-    alignas(64) std::array<float, BLOCK_SIZE> Bx, By, Bz;
+    using ComponentArray = std::array<float, BLOCK_SIZE>;
 
-    inline void clear() noexcept
-    {
-        Ex.fill(0.f);
-        Ey.fill(0.f);
-        Ez.fill(0.f);
-        Bx.fill(0.f);
-        By.fill(0.f);
-        Bz.fill(0.f);
-    }
+    ComponentArray Ex{}, Ey{}, Ez{};
+    ComponentArray Bx{}, By{}, Bz{};
 };

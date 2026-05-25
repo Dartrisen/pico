@@ -22,38 +22,34 @@ namespace field
      * @tparam BLOCK_SIZE Number of fields per block (must be multiple of 8)
      */
     template <size_t BLOCK_SIZE>
-    struct FieldBlock
+    struct alignas(64) FieldBlock
     {
-        std::array<float, BLOCK_SIZE> field_x;
-        std::array<float, BLOCK_SIZE> field_y;
-        std::array<float, BLOCK_SIZE> field_z;
+        using ComponentArray = std::array<float, BLOCK_SIZE>;
 
-        auto& component(FieldComp c) noexcept
+        ComponentArray field_x;
+        ComponentArray field_y;
+        ComponentArray field_z;
+
+        template <FieldComp C>
+        ComponentArray& component() noexcept
         {
-            switch (c)
-            {
-                case FieldComp::X:
-                    return field_x;
-                case FieldComp::Y:
-                    return field_y;
-                case FieldComp::Z:
-                    return field_z;
-            }
-            __builtin_unreachable();
+            if constexpr (C == FieldComp::X)
+                return field_x;
+            else if constexpr (C == FieldComp::Y)
+                return field_y;
+            else
+                return field_z;
         }
 
-        const auto& component(FieldComp c) const noexcept
+        template <FieldComp C>
+        const ComponentArray& component() const noexcept
         {
-            switch (c)
-            {
-                case FieldComp::X:
-                    return field_x;
-                case FieldComp::Y:
-                    return field_y;
-                case FieldComp::Z:
-                    return field_z;
-            }
-            __builtin_unreachable();
+            if constexpr (C == FieldComp::X)
+                return field_x;
+            else if constexpr (C == FieldComp::Y)
+                return field_y;
+            else
+                return field_z;
         }
     };
 
