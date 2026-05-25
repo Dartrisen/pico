@@ -2,7 +2,8 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
     name = "field",
-    hdrs = glob(["include/*.hpp", "src/*.inl"]),
+    hdrs = glob(["include/*.hpp"]),
+    textual_hdrs = glob(["src/*.inl"]),
     deps = [
         "//data/grid:grid"
     ],

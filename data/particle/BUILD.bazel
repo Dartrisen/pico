@@ -2,8 +2,9 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
     name = "particle",
-    hdrs = glob(["include/*.hpp", "src/*.inl"]),
+    hdrs = glob(["include/*.hpp"]),
     deps = [],
+    textual_hdrs = glob(["src/*.inl"]),
     includes = ["include"],
     include_prefix = "",
     copts = ["-O3", "-march=native"],
