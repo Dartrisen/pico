@@ -20,7 +20,7 @@ cc_binary(
         ":app_lib",
         "//engine",
     ],
-    copts = ["-O3", "-march=native", "-std=c++20"],
+    copts = ["-O3", "-march=native", "-std=c++20", "-faligned-allocation"],
     visibility = ["//visibility:public"],
 )
 
