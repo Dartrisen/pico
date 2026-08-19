@@ -1,53 +1,108 @@
 #pragma once
 
 #include "data/field/include/field_em.hpp"
-#include "data/particle/include/particle_system.hpp"
-#include "kernels/shapes/spline.hpp"
+#include "data/particle/include/particle_block.hpp"
+
+#include <cstddef>
 
 namespace kernels::gather
 {
 
-    template <class Shape, size_t BLOCK_SIZE>
+    template <class Shape, std::size_t BLOCK_SIZE>
     struct FieldGather
     {
-        static inline void gather(const particle::ParticleBlock<BLOCK_SIZE>& pb, const EMFields<BLOCK_SIZE>& fields,
-                                  const Grid& grid, FieldScratch<BLOCK_SIZE>& scratch)
+    private:
+        static int wrap_index(int index, int grid_size) noexcept
         {
-            constexpr int S = Shape::S;
-            static_assert(S > 0 && S <= 8);
+            index %= grid_size;
 
-            const float dx        = grid.cell_size();
-            const int   grid_size = static_cast<int>(grid.size());
-
-            for (size_t p = 0; p < pb.activeCount; ++p)
+            if (index < 0)
             {
-                int    i0;
-                double w[S];
+                index += grid_size;
+            }
 
-                Shape::weights(pb.position_x[p], dx, i0, w);
+            return index;
+        }
 
-                // register accumulators
-                float ex = 0.f;
-                float bx = 0.f;
+        template <::field::FieldComp Component>
+        static float interpolate_component(const FieldSystem<BLOCK_SIZE>& field_system, double particle_x, double dx,
+                                           int grid_size, double grid_offset)
+        {
+            constexpr int Support = Shape::S;
 
-                const auto& E = fields.E;
-                const auto& B = fields.B;
+            int    first_index = 0;
+            double weights[Support]{};
 
-                for (int s = 0; s < S; ++s)
-                {
-                    const int idx = i0 + s;
+            /*
+             * Field samples are located at:
+             *
+             *     x_i = (i + grid_offset) * dx
+             *
+             * Shape::weights() expects samples at i * dx, so shift the
+             * particle coordinate by the component's Yee-grid offset.
+             */
+            const double shifted_x = particle_x - grid_offset * dx;
 
-                    if ((unsigned) idx >= (unsigned) grid_size)
-                        continue;
+            Shape::weights(shifted_x, dx, first_index, weights);
 
-                    const float weight = static_cast<float>(w[s]);
+            float result = 0.0f;
 
-                    ex += weight * E.field_x(idx);
-                    bx += weight * B.field_x(idx);
-                }
+            for (int stencil = 0; stencil < Support; ++stencil)
+            {
+                const int index = wrap_index(first_index + stencil, grid_size);
 
-                scratch.Ex[p] = ex;
-                scratch.Bx[p] = bx;
+                result += static_cast<float>(weights[stencil]) *
+                          field_system.template field<Component>(static_cast<std::size_t>(index));
+            }
+
+            return result;
+        }
+
+    public:
+        static void gather(const particle::ParticleBlock<BLOCK_SIZE>& particle_block,
+                           const EMFields<BLOCK_SIZE>& fields, const Grid& grid, FieldScratch<BLOCK_SIZE>& scratch)
+        {
+            constexpr int Support = Shape::S;
+
+            static_assert(Support == 2, "The initial PIC implementation currently supports "
+                                        "linear CIC gathering only.");
+
+            constexpr double NodeOffset     = 0.0;
+            constexpr double HalfCellOffset = 0.5;
+
+            const double dx        = grid.cell_size();
+            const int    grid_size = static_cast<int>(grid.size());
+
+            for (std::size_t particle = 0; particle < particle_block.activeCount; ++particle)
+            {
+                const double x = static_cast<double>(particle_block.position_x[particle]);
+
+                /*
+                 * 1D3V Yee-grid component locations:
+                 *
+                 * Ex:     i + 1/2
+                 * Ey, Ez: i
+                 * Bx:     i
+                 * By, Bz: i + 1/2
+                 */
+
+                scratch.Ex[particle] =
+                        interpolate_component<::field::FieldComp::X>(fields.E, x, dx, grid_size, HalfCellOffset);
+
+                scratch.Ey[particle] =
+                        interpolate_component<::field::FieldComp::Y>(fields.E, x, dx, grid_size, NodeOffset);
+
+                scratch.Ez[particle] =
+                        interpolate_component<::field::FieldComp::Z>(fields.E, x, dx, grid_size, NodeOffset);
+
+                scratch.Bx[particle] =
+                        interpolate_component<::field::FieldComp::X>(fields.B, x, dx, grid_size, NodeOffset);
+
+                scratch.By[particle] =
+                        interpolate_component<::field::FieldComp::Y>(fields.B, x, dx, grid_size, HalfCellOffset);
+
+                scratch.Bz[particle] =
+                        interpolate_component<::field::FieldComp::Z>(fields.B, x, dx, grid_size, HalfCellOffset);
             }
         }
     };
