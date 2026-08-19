@@ -8,9 +8,9 @@
 
 template <class FieldSolverT, class GatherT, class PusherT, size_t BLOCK_SIZE>
     requires pico::modules::FieldSolver<FieldSolverT, EMFields<BLOCK_SIZE>, FieldSystem<BLOCK_SIZE>> &&
-             pico::modules::Gather<GatherT, particle::ParticleSystem<BLOCK_SIZE>, EMFields<BLOCK_SIZE>,
+             pico::modules::Gather<GatherT, particle::ParticleBlock<BLOCK_SIZE>, EMFields<BLOCK_SIZE>,
                                    FieldScratch<BLOCK_SIZE>> &&
-             pico::modules::Pusher<PusherT, particle::ParticleSystem<BLOCK_SIZE>, FieldScratch<BLOCK_SIZE>>
+             pico::modules::Pusher<PusherT, particle::ParticleBlock<BLOCK_SIZE>, FieldScratch<BLOCK_SIZE>>
 class PICEngine final : public EngineBase<PICEngine<FieldSolverT, GatherT, PusherT, BLOCK_SIZE>>
 {
 public:
@@ -23,8 +23,11 @@ public:
     {
         const Grid& grid = fields_.E.grid();
 
-        GatherT::gather(particles_, fields_, grid, scratch_);
-        pusher_.push(particles_, scratch_, dt);
+        for (auto& block : particles_)
+        {
+            gather_.gather_block(block, fields_, grid, scratch_);
+            pusher_.push_block(block, scratch_, dt);
+        }
         field_solver_.solve(fields_, current_, dt);
     }
 

@@ -12,13 +12,10 @@ namespace pico::modules::pusher
             size_t BLOCK_SIZE>
     struct BorisPusher
     {
-        void push(particle::ParticleSystem<BLOCK_SIZE>& particles, const FieldScratch<BLOCK_SIZE>& fields,
-                  double dt) const
+        void push_block(particle::ParticleBlock<BLOCK_SIZE>& block, const FieldScratch<BLOCK_SIZE>& fields,
+                        double dt) const
         {
-            for (auto& block : particles)
-            {
-                kernels::pusher::BorisPusher<BLOCK_SIZE>::push_block(block, fields, dt);
-            }
+            kernels::pusher::BorisPusher<BLOCK_SIZE>::push_block(block, fields, dt);
         }
     };
 

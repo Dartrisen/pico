@@ -1,5 +1,6 @@
 #pragma once
 #include "field_system.hpp"
+#include "grid.hpp"
 
 template <size_t BLOCK_SIZE>
 struct EMFields

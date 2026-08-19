@@ -14,9 +14,9 @@ namespace pico::modules
     };
 
     // Particle pusher concept
-    template <class T, class ParticleSystem, class FieldsScratch>
-    concept Pusher = requires(T p, ParticleSystem& part, const FieldsScratch& f, double dt) {
-        { p.push(part, f, dt) } -> std::same_as<void>;
+    template <class T, class ParticleBlock, class FieldsScratch>
+    concept Pusher = requires(T p, ParticleBlock& block, const FieldsScratch& f, double dt) {
+        { p.push_block(block, f, dt) } -> std::same_as<void>;
     };
 
     // Collision model concept
@@ -26,10 +26,11 @@ namespace pico::modules
     };
 
     // Gather concept: map grid fields onto particles
-    template <class T, class ParticleSystem, class EMFields, class FieldScratch>
-    concept Gather = requires(T g, const ParticleSystem& p, const EMFields& f, const Grid& grid, FieldScratch& s) {
-        { g.gather(p, f, grid, s) } -> std::same_as<void>;
-    };
+    template <class T, class ParticleBlock, class EMFields, class FieldScratch>
+    concept Gather =
+            requires(T g, const ParticleBlock& block, const EMFields& fields, const Grid& grid, FieldScratch& scratch) {
+                { g.gather_block(block, fields, grid, scratch) } -> std::same_as<void>;
+            };
 
     // Current / charge deposition concept
     template <class T, class Particles, class Fields>
