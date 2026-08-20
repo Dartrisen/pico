@@ -148,7 +148,7 @@ namespace particle
     template <size_t BLOCK_SIZE>
     void ParticleSystem<BLOCK_SIZE>::init_positions_uniform(const Grid& grid)
     {
-        init_positions_uniform(grid.size() * grid.cell_size());
+        init_positions_uniform(grid.physical_size() * grid.cell_size());
     }
 
     template <size_t BLOCK_SIZE>

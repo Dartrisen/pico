@@ -12,9 +12,9 @@ constexpr size_t CACHE_LINE = 64;
 
 enum ParticleValue
 {
-    mass,
-    charge,
-    weight
+    mass   = 1,
+    charge = -1,
+    weight = 1
 };
 
 namespace particle
