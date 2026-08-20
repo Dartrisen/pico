@@ -13,7 +13,6 @@ namespace pico::modules::field
             const Grid& grid = fields.E.grid();
 
             kernels::field::MaxwellYeeKernel<BLOCK_SIZE>::update_B(fields, grid, dt);
-
             kernels::field::MaxwellYeeKernel<BLOCK_SIZE>::update_E(fields, J, grid, dt);
         }
     };

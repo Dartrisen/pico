@@ -13,7 +13,11 @@ namespace kernels::field
             // scalar loop version (keep for now)
             for (size_t i = 0; i < grid.size() - 1; ++i)
             {
-                fields.B[i] -= dt * dx_inv * (fields.E[i + 1] - fields.E[i]);
+                // Bx is constant in 1D propagation along x (d/dy = d/dz = 0)
+                // dBy/dt =  dEz/dx
+                // dBz/dt = -dEy/dx
+                fields.B.field_y(i) += dt * dx_inv * (fields.E.field_z(i + 1) - fields.E.field_z(i));
+                fields.B.field_z(i) -= dt * dx_inv * (fields.E.field_y(i + 1) - fields.E.field_y(i));
             }
         }
 
@@ -24,7 +28,12 @@ namespace kernels::field
 
             for (size_t i = 1; i < grid.size() - 1; ++i)
             {
-                fields.E[i] += dt * ((fields.B[i] - fields.B[i - 1]) * dx_inv - J[i]);
+                // dEx/dt = -Jx  (Longitudinal electrostatics)
+                // dEy/dt = -dBz/dx - Jy
+                // dEz/dt =  dBy/dx - Jz
+                fields.E.field_x(i) -= dt * J.field_x(i);
+                fields.E.field_y(i) -= dt * (dx_inv * (fields.B.field_z(i) - fields.B.field_z(i - 1)) + J.field_y(i));
+                fields.E.field_z(i) += dt * (dx_inv * (fields.B.field_y(i) - fields.B.field_y(i - 1)) - J.field_z(i));
             }
         }
     };
