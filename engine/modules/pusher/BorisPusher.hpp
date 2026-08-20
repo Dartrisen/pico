@@ -8,7 +8,6 @@ namespace pico::modules::pusher
 
     template <
             // bool Relativistic,
-            // class Shape,
             size_t BLOCK_SIZE>
     struct BorisPusher
     {

@@ -15,42 +15,48 @@ namespace kernels::pusher
 
             for (size_t p = 0; p < pb.activeCount; ++p)
             {
-                const float q_over_m  = pb.charge[p] / pb.mass[p];
-                const float half_q_dt = half_dt * q_over_m;
+                const float q          = pb.charge[p];
+                const float inv_m      = 1.0f / pb.mass[p];
+                const float half_q_dt  = half_dt * q;       // Impulse factor (q * dt / 2)
+                const float half_qm_dt = half_q_dt * inv_m; // Rotation factor (q * dt / 2m)
 
                 // --- half electric kick ---
-                float ux = pb.momentum_x[p] + half_q_dt * fs.Ex[p];
-                float uy = pb.momentum_y[p] + half_q_dt * fs.Ey[p];
-                float uz = pb.momentum_z[p] + half_q_dt * fs.Ez[p];
+                float px = pb.momentum_x[p] + half_q_dt * fs.Ex[p];
+                float py = pb.momentum_y[p] + half_q_dt * fs.Ey[p];
+                float pz = pb.momentum_z[p] + half_q_dt * fs.Ez[p];
 
                 // --- magnetic rotation ---
-                float tx = half_q_dt * fs.Bx[p];
-                float ty = half_q_dt * fs.By[p];
-                float tz = half_q_dt * fs.Bz[p];
+                float tx = half_qm_dt * fs.Bx[p];
+                float ty = half_qm_dt * fs.By[p];
+                float tz = half_qm_dt * fs.Bz[p];
 
                 float t2 = tx * tx + ty * ty + tz * tz;
                 float sx = 2.0f * tx / (1.0f + t2);
                 float sy = 2.0f * ty / (1.0f + t2);
                 float sz = 2.0f * tz / (1.0f + t2);
 
-                // u' = u- + u- x t
-                float uxp = ux + (uy * tz - uz * ty);
-                float uyp = uy + (uz * tx - ux * tz);
-                float uzp = uz + (ux * ty - uy * tx);
+                // p' = p- + p- x t
+                float pxp = px + (py * tz - pz * ty);
+                float pyp = py + (pz * tx - px * tz);
+                float pzp = pz + (px * ty - py * tx);
 
-                // u+ = u- + u' x s
-                ux += (uyp * sz - uzp * sy);
-                uy += (uzp * sx - uxp * sz);
-                uz += (uxp * sy - uyp * sx);
+                // p+ = p- + p' x s
+                px += (pyp * sz - pzp * sy);
+                py += (pzp * sx - pxp * sz);
+                pz += (pxp * sy - pyp * sx);
 
                 // --- half electric kick ---
-                pb.momentum_x[p] = ux + half_q_dt * fs.Ex[p];
-                pb.momentum_y[p] = uy + half_q_dt * fs.Ey[p];
-                pb.momentum_z[p] = uz + half_q_dt * fs.Ez[p];
+                px += half_q_dt * fs.Ex[p];
+                py += half_q_dt * fs.Ey[p];
+                pz += half_q_dt * fs.Ez[p];
+
+                // Write back updated momentum
+                pb.momentum_x[p] = px;
+                pb.momentum_y[p] = py;
+                pb.momentum_z[p] = pz;
 
                 // --- position update (v = p / m) ---
-                float vx = pb.momentum_x[p] / pb.mass[p];
-                pb.position_x[p] += dt * vx;
+                pb.position_x[p] += dt * px * inv_m;
             }
         }
     };
