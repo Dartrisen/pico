@@ -58,6 +58,26 @@ public:
         return field<field::FieldComp::X>(idx);
     }
 
+    float& field_y(size_t idx) noexcept
+    {
+        return field<field::FieldComp::Y>(idx);
+    }
+
+    const float& field_y(size_t idx) const noexcept
+    {
+        return field<field::FieldComp::Y>(idx);
+    }
+
+    float& field_z(size_t idx) noexcept
+    {
+        return field<field::FieldComp::Z>(idx);
+    }
+
+    const float& field_z(size_t idx) const noexcept
+    {
+        return field<field::FieldComp::Z>(idx);
+    }
+
     float& operator[](size_t idx) noexcept
     {
         return field_x(idx);
@@ -66,6 +86,14 @@ public:
     const float& operator[](size_t idx) const noexcept
     {
         return field_x(idx);
+    }
+
+    // ---- zero out system ----
+    void zero_out() noexcept
+    {
+        set_fields<field::FieldComp::X>(0.0f);
+        set_fields<field::FieldComp::Y>(0.0f);
+        set_fields<field::FieldComp::Z>(0.0f);
     }
 
     // ---- block iteration ----
