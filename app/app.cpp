@@ -4,6 +4,7 @@
 #include "app/PICApp.hpp"
 #include "data/grid/include/grid.hpp"
 #include "engine/PICEngine.hpp"
+#include "engine/modules/deposit/Deposit.hpp"
 #include "engine/modules/field/YeeMaxwell.hpp"
 #include "engine/modules/gather/Gather.hpp"
 #include "engine/modules/pusher/BorisPusher.hpp"
@@ -24,16 +25,13 @@ int main(int argc, char** argv)
     using Field  = pico::modules::field::YeeMaxwell<BS>;
     using Push   = pico::modules::pusher::BorisPusher<BS>;
     using Gather = pico::modules::gather::Gather<Shape, BS>;
+    using Dep    = pico::modules::deposit::SimpleDeposit<Shape, BS>;
     // using Coll  = module::collision::NoCollision;
-    // using Dep   = module::deposit::Esirkepov<BS>;
 
-    using EngineT = PICEngine<Field, Gather, Push,
-                              // Coll,
-                              // Dep,
-                              BS>;
+    using EngineT = PICEngine<Field, Gather, Push, Dep, BS>;
 
     // ---- bridge abstraction: runtime → compile-time ----
-    auto engine = std::make_unique<EngineWrapper<EngineT>>(EngineT{grid});
+    auto engine = std::make_unique<EngineWrapper<EngineT>>(EngineT{grid, 10});
 
     // ---- high-level app ----
     PICApp app(std::move(engine), dt);

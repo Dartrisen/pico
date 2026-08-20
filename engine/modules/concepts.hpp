@@ -33,9 +33,10 @@ namespace pico::modules
             };
 
     // Current / charge deposition concept
-    template <class T, class Particles, class Fields>
-    concept Deposit = requires(T d, const Particles& p, Fields& f) {
-        { d.deposit(p, f) } -> std::same_as<void>;
-    };
+    template <class T, class Block, class FieldSystem>
+    concept Deposit =
+            requires(T d, const Block& block, FieldSystem& current, const Grid& grid, double dt, uint32_t n_ppc) {
+                { d.deposit_block(block, current, grid, dt, n_ppc) } -> std::same_as<void>;
+            };
 
 } // namespace pico::modules
