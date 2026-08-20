@@ -6,7 +6,7 @@
  */
 template <size_t BLOCK_SIZE>
 FieldSystem<BLOCK_SIZE>::FieldSystem(const Grid& grid)
-        : grid_(grid), blocks_((grid.size() + BLOCK_SIZE - 1) / BLOCK_SIZE)
+        : grid_(grid), blocks_((grid.total_size() + BLOCK_SIZE - 1) / BLOCK_SIZE)
 {
     if (blocks_.empty())
         throw std::bad_alloc();
