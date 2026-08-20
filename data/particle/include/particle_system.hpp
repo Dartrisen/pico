@@ -30,6 +30,13 @@ namespace particle
 
         void set_active(size_t n);
 
+        // ---- Particle State Initializers ----
+        void init_positions_uniform(double domain_length);
+        void init_positions_uniform(const Grid& grid);
+        void init_velocities_cold(float vx = 0.0f, float vy = 0.0f, float vz = 0.0f);
+        void init_velocities_thermal(float v_th, float v_drift_x = 0.0f, float v_drift_y = 0.0f, float v_drift_z = 0.0f,
+                                     uint32_t seed = 42);
+
         static constexpr size_t block_size();
         size_t                  num_blocks() const;
         size_t                  max_particles() const;
@@ -68,4 +75,5 @@ namespace particle
     };
 
 } // namespace particle
+
 #include "data/particle/src/particle_system.inl"
