@@ -3,58 +3,21 @@
 #include "data/field/include/field_em.hpp"
 #include "data/particle/include/particle_block.hpp"
 
-#include <cstddef>
-
 namespace kernels::gather
 {
-
     template <class Shape, std::size_t BLOCK_SIZE>
     struct FieldGather
     {
     private:
-        static int wrap_index(int index, int grid_size) noexcept
-        {
-            index %= grid_size;
-
-            if (index < 0)
-            {
-                index += grid_size;
-            }
-
-            return index;
-        }
-
         template <::field::FieldComp Component>
-        static float interpolate_component(const FieldSystem<BLOCK_SIZE>& field_system, double particle_x, double dx,
-                                           int grid_size, double grid_offset)
+        static float interpolate_component(const FieldSystem<BLOCK_SIZE>& field_system, int start_idx,
+                                           const float (&w)[Shape::S])
         {
-            constexpr int Support = Shape::S;
-
-            int    first_index = 0;
-            double weights[Support]{};
-
-            /*
-             * Field samples are located at:
-             *
-             *     x_i = (i + grid_offset) * dx
-             *
-             * Shape::weights() expects samples at i * dx, so shift the
-             * particle coordinate by the component's Yee-grid offset.
-             */
-            const double shifted_x = particle_x - grid_offset * dx;
-
-            Shape::weights(shifted_x, dx, first_index, weights);
-
             float result = 0.0f;
-
-            for (int stencil = 0; stencil < Support; ++stencil)
+            for (int s = 0; s < Shape::S; ++s)
             {
-                const int index = wrap_index(first_index + stencil, grid_size);
-
-                result += static_cast<float>(weights[stencil]) *
-                          field_system.template field<Component>(static_cast<std::size_t>(index));
+                result += w[s] * field_system.template field<Component>(start_idx + s);
             }
-
             return result;
         }
 
@@ -62,49 +25,42 @@ namespace kernels::gather
         static void gather(const particle::ParticleBlock<BLOCK_SIZE>& particle_block,
                            const EMFields<BLOCK_SIZE>& fields, const Grid& grid, FieldScratch<BLOCK_SIZE>& scratch)
         {
-            constexpr int Support = Shape::S;
+            constexpr int S = Shape::S;
 
-            static_assert(Support == 2, "The initial PIC implementation currently supports "
-                                        "linear CIC gathering only.");
+            const double dx     = grid.cell_size();
+            const int    guards = static_cast<int>(grid.guard_cells());
 
-            constexpr double NodeOffset     = 0.0;
-            constexpr double HalfCellOffset = 0.5;
-
-            const double dx        = grid.cell_size();
-            const int    grid_size = static_cast<int>(grid.size());
-
-            for (std::size_t particle = 0; particle < particle_block.activeCount; ++particle)
+            for (std::size_t p = 0; p < particle_block.activeCount; ++p)
             {
-                const double x = static_cast<double>(particle_block.position_x[particle]);
+                const double x = particle_block.position_x[p];
 
-                /*
-                 * 1D3V Yee-grid component locations:
-                 *
-                 * Ex:     i + 1/2
-                 * Ey, Ez: i
-                 * Bx:     i
-                 * By, Bz: i + 1/2
-                 */
+                // 1. Double-precision shape evaluations
+                int    i0_node = 0, i0_half = 0;
+                double w_node_d[S]{}, w_half_d[S]{};
 
-                scratch.Ex[particle] =
-                        interpolate_component<::field::FieldComp::X>(fields.E, x, dx, grid_size, HalfCellOffset);
+                Shape::weights(x, dx, i0_node, w_node_d);
+                Shape::weights(x - 0.5 * dx, dx, i0_half, w_half_d);
 
-                scratch.Ey[particle] =
-                        interpolate_component<::field::FieldComp::Y>(fields.E, x, dx, grid_size, NodeOffset);
+                // 2. Convert weights to float ONCE for fast SIMD gathering
+                float w_node[S], w_half[S];
+                for (int s = 0; s < S; ++s)
+                {
+                    w_node[s] = static_cast<float>(w_node_d[s]);
+                    w_half[s] = static_cast<float>(w_half_d[s]);
+                }
 
-                scratch.Ez[particle] =
-                        interpolate_component<::field::FieldComp::Z>(fields.E, x, dx, grid_size, NodeOffset);
+                const int node_start = i0_node + guards;
+                const int half_start = i0_half + guards;
 
-                scratch.Bx[particle] =
-                        interpolate_component<::field::FieldComp::X>(fields.B, x, dx, grid_size, NodeOffset);
+                // 3. Clean stencil accumulation
+                scratch.Ex[p] = interpolate_component<::field::FieldComp::X>(fields.E, half_start, w_half);
+                scratch.By[p] = interpolate_component<::field::FieldComp::Y>(fields.B, half_start, w_half);
+                scratch.Bz[p] = interpolate_component<::field::FieldComp::Z>(fields.B, half_start, w_half);
 
-                scratch.By[particle] =
-                        interpolate_component<::field::FieldComp::Y>(fields.B, x, dx, grid_size, HalfCellOffset);
-
-                scratch.Bz[particle] =
-                        interpolate_component<::field::FieldComp::Z>(fields.B, x, dx, grid_size, HalfCellOffset);
+                scratch.Ey[p] = interpolate_component<::field::FieldComp::Y>(fields.E, node_start, w_node);
+                scratch.Ez[p] = interpolate_component<::field::FieldComp::Z>(fields.E, node_start, w_node);
+                scratch.Bx[p] = interpolate_component<::field::FieldComp::X>(fields.B, node_start, w_node);
             }
         }
     };
-
 } // namespace kernels::gather
