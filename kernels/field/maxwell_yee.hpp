@@ -1,41 +1,46 @@
 #pragma once
 
+#include "data/field/include/field_system.hpp"
+#include "data/grid/include/grid.hpp"
+
 namespace kernels::field
 {
-
-    template <size_t BLOCK_SIZE>
-    struct MaxwellYeeKernel
+    template <std::size_t BLOCK_SIZE>
+    struct YeeMaxwell
     {
-        static inline void update_B(EMFields<BLOCK_SIZE>& fields, const Grid& grid, float dt)
+        static void advance_electric_field(FieldSystem<BLOCK_SIZE>& E, const FieldSystem<BLOCK_SIZE>& B,
+                                           const FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt)
         {
-            const float dx_inv = 1.f / grid.cell_size();
+            const std::size_t G   = grid.guard_cells();
+            const std::size_t N   = grid.physical_size();
+            const double      dxd = grid.cell_size();
 
-            // scalar loop version (keep for now)
-            for (size_t i = 0; i < grid.size() - 1; ++i)
+            // Loop over physical domain starting at guard cell offset G
+            for (std::size_t i = G; i < G + N; ++i)
             {
-                // Bx is constant in 1D propagation along x (d/dy = d/dz = 0)
-                // dBy/dt =  dEz/dx
-                // dBz/dt = -dEy/dx
-                fields.B.field_y(i) += dt * dx_inv * (fields.E.field_z(i + 1) - fields.E.field_z(i));
-                fields.B.field_z(i) -= dt * dx_inv * (fields.E.field_y(i + 1) - fields.E.field_y(i));
+                // dBz/dx derivative using staggered grid offset
+                float dBz_dx = (B.field_z(i) - B.field_z(i - 1)) / dxd;
+
+                E.field_y(i) += dt * (-dBz_dx - J.field_y(i));
+                E.field_x(i) += dt * (-J.field_x(i));
+                E.field_z(i) += dt * (-J.field_z(i));
             }
         }
 
-        static inline void update_E(EMFields<BLOCK_SIZE>& fields, const FieldSystem<BLOCK_SIZE>& J, const Grid& grid,
-                                    float dt)
+        static void advance_magnetic_field(FieldSystem<BLOCK_SIZE>& B, const FieldSystem<BLOCK_SIZE>& E,
+                                           const Grid& grid, float dt)
         {
-            const float dx_inv = 1.f / grid.cell_size();
+            const std::size_t G   = grid.guard_cells();
+            const std::size_t N   = grid.physical_size();
+            const double      dxd = grid.cell_size();
 
-            for (size_t i = 1; i < grid.size() - 1; ++i)
+            for (std::size_t i = G; i < G + N; ++i)
             {
-                // dEx/dt = -Jx  (Longitudinal electrostatics)
-                // dEy/dt = -dBz/dx - Jy
-                // dEz/dt =  dBy/dx - Jz
-                fields.E.field_x(i) -= dt * J.field_x(i);
-                fields.E.field_y(i) -= dt * (dx_inv * (fields.B.field_z(i) - fields.B.field_z(i - 1)) + J.field_y(i));
-                fields.E.field_z(i) += dt * (dx_inv * (fields.B.field_y(i) - fields.B.field_y(i - 1)) - J.field_z(i));
+                // dEy/dx derivative
+                float dEy_dx = (E.field_y(i + 1) - E.field_y(i)) / dxd;
+
+                B.field_z(i) -= dt * dEy_dx;
             }
         }
     };
-
 } // namespace kernels::field
