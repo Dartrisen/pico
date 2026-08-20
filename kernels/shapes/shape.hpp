@@ -31,7 +31,11 @@ namespace kernels::shapes
                 SplineShape<Order>::weights(pb.position_x[p], grid.cell_size(), i0, w);
 
                 scratch.Ex[p] = 0.0f;
+                scratch.Ey[p] = 0.0f;
+                scratch.Ez[p] = 0.0f;
                 scratch.Bx[p] = 0.0f;
+                scratch.By[p] = 0.0f;
+                scratch.Bz[p] = 0.0f;
 
                 for (int s = 0; s < S; ++s)
                 {
@@ -43,7 +47,11 @@ namespace kernels::shapes
                     float fB = fields.B.field_x(idx);
 
                     scratch.Ex[p] += static_cast<float>(w[s] * fE);
+                    scratch.Ey[p] += static_cast<float>(w[s] * fE);
+                    scratch.Ez[p] += static_cast<float>(w[s] * fE);
                     scratch.Bx[p] += static_cast<float>(w[s] * fB);
+                    scratch.By[p] += static_cast<float>(w[s] * fB);
+                    scratch.Bz[p] += static_cast<float>(w[s] * fB);
                 }
             }
         }
