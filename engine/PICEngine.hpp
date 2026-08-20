@@ -4,33 +4,33 @@
 #include "data/field/include/field_em.hpp"
 #include "data/field/include/field_system.hpp"
 #include "data/particle/include/particle_system.hpp"
+#include "engine/modules/boundary/PeriodicBoundary.hpp"
 #include "engine/modules/concepts.hpp"
 
 #include <cstdint>
 
-template <class FieldSolverT, class GatherT, class PusherT, class DepositT, size_t BLOCK_SIZE>
+template <class FieldSolverT, class GatherT, class PusherT, class DepositT, class BoundaryT, std::size_t BLOCK_SIZE>
     requires pico::modules::FieldSolver<FieldSolverT, EMFields<BLOCK_SIZE>, FieldSystem<BLOCK_SIZE>> &&
              pico::modules::Gather<GatherT, particle::ParticleBlock<BLOCK_SIZE>, EMFields<BLOCK_SIZE>,
                                    FieldScratch<BLOCK_SIZE>> &&
              pico::modules::Pusher<PusherT, particle::ParticleBlock<BLOCK_SIZE>, FieldScratch<BLOCK_SIZE>> &&
              pico::modules::Deposit<DepositT, particle::ParticleBlock<BLOCK_SIZE>, FieldSystem<BLOCK_SIZE>>
-class PICEngine final : public EngineBase<PICEngine<FieldSolverT, GatherT, PusherT, DepositT, BLOCK_SIZE>>
+class PICEngine final : public EngineBase<PICEngine<FieldSolverT, GatherT, PusherT, DepositT, BoundaryT, BLOCK_SIZE>>
 {
 public:
     explicit PICEngine(const Grid& grid, size_t particles_per_cell = 10)
-            : fields_(grid), current_(grid), scratch_(), particles_(grid.size() * particles_per_cell), field_solver_{},
-              pusher_{}, gather_{}, deposit_{}
+            : fields_(grid), current_(grid), scratch_(), particles_(grid.physical_size() * particles_per_cell),
+              field_solver_{}, pusher_{}, gather_{}, deposit_{}, boundary_{}
     {
-        particles_.set_active(grid.size() * particles_per_cell);
+        particles_.set_active(grid.physical_size() * particles_per_cell);
         particles_.init_positions_uniform(grid);
         particles_.init_velocities_cold(0.01f, 0.0f, 0.0f);
         particles_per_cell_ = particles_per_cell;
     }
 
-    // Constructor taking an explicitly constructed ParticleSystem
     PICEngine(const Grid& grid, particle::ParticleSystem<BLOCK_SIZE> particles)
             : fields_(grid), current_(grid), scratch_(), particles_(std::move(particles)), field_solver_{}, pusher_{},
-              gather_{}, deposit_{}
+              gather_{}, deposit_{}, boundary_{}
     {
     }
 
@@ -38,20 +38,27 @@ public:
     {
         const Grid& grid = fields_.E.grid();
 
-        // 1. Reset grid currents before particle deposition
+        // Step 1: Fill field guard cells before gathering
+        boundary_.fill_field_guards(fields_, grid);
+
+        // Step 2: Reset currents
         current_.zero_out();
 
-        // 2. Perform block-by-block PIC steps
+        // Step 3: Block-by-block gather -> push -> deposit
         for (auto& block : particles_)
         {
             gather_.gather_block(block, fields_, grid, scratch_);
             pusher_.push_block(block, scratch_, dt);
             deposit_.deposit_block(block, current_, grid, dt, particles_per_cell_);
         }
+
+        // Step 4: Fold guard currents into physical boundary cells
+        boundary_.fold_currents(current_, grid);
+
+        // Step 5: Advance Maxwell field equations
         field_solver_.solve(fields_, current_, dt);
     }
 
-    // ---- State Accessors ----
     particle::ParticleSystem<BLOCK_SIZE>& particles() noexcept
     {
         return particles_;
@@ -80,18 +87,16 @@ public:
     }
 
 private:
-    // Simulation state
     EMFields<BLOCK_SIZE>                 fields_;
     FieldSystem<BLOCK_SIZE>              current_;
     FieldScratch<BLOCK_SIZE>             scratch_;
     particle::ParticleSystem<BLOCK_SIZE> particles_;
 
-    // Physics modules
     FieldSolverT field_solver_;
     PusherT      pusher_;
     GatherT      gather_;
     DepositT     deposit_;
+    BoundaryT    boundary_;
 
-    // Simulation parameters
     uint32_t particles_per_cell_;
 };
