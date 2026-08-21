@@ -7,7 +7,6 @@ cc_library(
     deps = [
         "//engine",
         "//kernels/shapes",
-        "//engine/modules/diagnostics:tracker"
     ],
     include_prefix = "",
     copts = ["-O3", "-march=native"],

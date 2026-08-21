@@ -1,9 +1,8 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
-    name = "tracker",
+    name = "diagnostics",
     hdrs = [
-        "PerfTracker.hpp",
         "EnergyDiagnostic.hpp"
     ],
     visibility = ["//visibility:public"],
