@@ -12,8 +12,8 @@ struct CurrentDeposit
 {
 private:
     template <::field::FieldComp Component>
-    static void deposit_component(FieldSystem<BLOCK_SIZE>& J, double particle_x, float flux, float inv_ppc, double dx,
-                                  std::size_t guard_cells, double grid_offset)
+    static void deposit_component(FieldSystem<BLOCK_SIZE>& J, double particle_x, float flux, float inv_ppc,
+                                  float inv_dx, double dx, std::size_t guard_cells, double grid_offset)
     {
         constexpr int Support = Shape::S;
 
@@ -23,12 +23,12 @@ private:
         const double shifted_x = particle_x - grid_offset * dx;
         Shape::weights(shifted_x, dx, first_index, weights);
 
-        // Directly offset index into the padded buffer
         const int buffer_start = first_index + static_cast<int>(guard_cells);
 
         for (int stencil = 0; stencil < Support; ++stencil)
         {
-            const float ws = static_cast<float>(weights[stencil]) * inv_ppc;
+            // Included inv_dx (1 / dx) for 1D density scaling
+            const float ws = static_cast<float>(weights[stencil]) * inv_ppc * inv_dx;
             J.template field<Component>(static_cast<std::size_t>(buffer_start + stencil)) += ws * flux;
         }
     }
@@ -43,6 +43,7 @@ public:
         const double      dx          = grid.cell_size();
         const std::size_t guard_cells = grid.guard_cells();
         const float       inv_ppc     = 1.0f / ppc;
+        const float       inv_dx      = static_cast<float>(1.0 / dx);
 
         for (std::size_t p = 0; p < pb.activeCount; ++p)
         {
@@ -54,9 +55,9 @@ public:
             const float qvy = q * (pb.momentum_y[p] * inv_m);
             const float qvz = q * (pb.momentum_z[p] * inv_m);
 
-            deposit_component<::field::FieldComp::X>(J, x, qvx, inv_ppc, dx, guard_cells, HalfCellOffset);
-            deposit_component<::field::FieldComp::Y>(J, x, qvy, inv_ppc, dx, guard_cells, NodeOffset);
-            deposit_component<::field::FieldComp::Z>(J, x, qvz, inv_ppc, dx, guard_cells, NodeOffset);
+            deposit_component<::field::FieldComp::X>(J, x, qvx, inv_ppc, inv_dx, dx, guard_cells, HalfCellOffset);
+            deposit_component<::field::FieldComp::Y>(J, x, qvy, inv_ppc, inv_dx, dx, guard_cells, NodeOffset);
+            deposit_component<::field::FieldComp::Z>(J, x, qvz, inv_ppc, inv_dx, dx, guard_cells, NodeOffset);
         }
     }
 };
