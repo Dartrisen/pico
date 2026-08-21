@@ -114,8 +114,7 @@ public:
     template <field::FieldComp C>
     void set_fields(float value) noexcept
     {
-        for_each_block([&](auto& blk, size_t)
-                       { std::fill(blk.template component<C>().begin(), blk.template component<C>().end(), value); });
+        for_each_block([&](auto& blk, size_t) { std::fill(blk.template component<C>().begin(), blk.template component<C>().end(), value); });
     }
 
     // backward-compatible helper

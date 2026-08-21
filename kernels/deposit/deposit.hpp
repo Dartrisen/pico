@@ -7,13 +7,12 @@
 namespace kernels::deposit
 {
 
-template <class Shape, std::size_t BLOCK_SIZE>
+template <class Shape, /*relativistic=false*/ std::size_t BLOCK_SIZE>
 struct CurrentDeposit
 {
 private:
     template <::field::FieldComp Component>
-    static void deposit_component(FieldSystem<BLOCK_SIZE>& J, double particle_x, float flux, float inv_ppc,
-                                  float inv_dx, double dx, std::size_t guard_cells, double grid_offset)
+    static void deposit_component(FieldSystem<BLOCK_SIZE>& J, double particle_x, float flux, float inv_ppc, float inv_dx, double dx, std::size_t guard_cells, double grid_offset)
     {
         constexpr int Support = Shape::S;
 
@@ -34,8 +33,7 @@ private:
     }
 
 public:
-    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid,
-                        float dt, float ppc)
+    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc)
     {
         constexpr double NodeOffset     = 0.0;
         constexpr double HalfCellOffset = 0.5;

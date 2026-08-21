@@ -8,7 +8,7 @@ namespace field
 {
 
 /**
- * @brief Enum for field components
+ * @brief Enum for field components 
  */
 enum class FieldComp : uint8_t
 {

@@ -10,7 +10,7 @@ TabWidth: 4
 UseTab: Never
 
 # Line length
-ColumnLimit: 120
+ColumnLimit: 180
 
 # Braces
 BreakBeforeBraces: Allman

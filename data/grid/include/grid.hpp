@@ -10,10 +10,7 @@ private:
     std::size_t guard_cells_; // G (e.g., 2)
 
 public:
-    Grid(std::size_t num_cells, double cell_size, std::size_t guard_cells = 2)
-            : num_cells_(num_cells), cell_size_(cell_size), guard_cells_(guard_cells)
-    {
-    }
+    Grid(std::size_t num_cells, double cell_size, std::size_t guard_cells = 2) : num_cells_(num_cells), cell_size_(cell_size), guard_cells_(guard_cells) {}
 
     [[nodiscard]] std::size_t physical_size() const noexcept
     {

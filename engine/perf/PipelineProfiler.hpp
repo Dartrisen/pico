@@ -23,12 +23,7 @@ enum class Stage : std::size_t
 };
 
 constexpr std::array<std::string_view, static_cast<std::size_t>(Stage::Count)> STAGE_NAMES = {
-        "Field Gather",
-        "Boris Pusher & Particle Boundary",
-        "Current Deposit",
-        "Field Solver (Yee Maxwell)",
-        "Boundary Handlers (Field/Current)",
-        "Particle Sorting"};
+        "Field Gather", "Boris Pusher & Particle Boundary", "Current Deposit", "Field Solver (Yee Maxwell)", "Boundary Handlers (Field/Current)", "Particle Sorting"};
 
 class PipelineProfiler
 {
@@ -41,8 +36,7 @@ public:
     {
         for (std::size_t i = 0; i < static_cast<std::size_t>(Stage::Count); ++i)
         {
-            accumulated_ns_[i].store(other.accumulated_ns_[i].load(std::memory_order_relaxed),
-                                     std::memory_order_relaxed);
+            accumulated_ns_[i].store(other.accumulated_ns_[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
         }
     }
 
@@ -52,8 +46,7 @@ public:
         {
             for (std::size_t i = 0; i < static_cast<std::size_t>(Stage::Count); ++i)
             {
-                accumulated_ns_[i].store(other.accumulated_ns_[i].load(std::memory_order_relaxed),
-                                         std::memory_order_relaxed);
+                accumulated_ns_[i].store(other.accumulated_ns_[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
             }
         }
         return *this;
