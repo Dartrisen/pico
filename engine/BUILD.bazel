@@ -13,6 +13,7 @@ cc_library(
         "//engine/modules/gather",
         "//engine/modules/deposit",
         "//engine/modules/boundary",
+        "//engine/modules/injector",
         "//engine/modules/sorter",
         "//engine/perf:profiler",
     ],

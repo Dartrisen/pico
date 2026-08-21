@@ -8,20 +8,22 @@
 #include "engine/modules/boundary/SilverMuller.hpp"
 #include "engine/modules/boundary/Thermalizing.hpp"
 #include "engine/modules/concepts.hpp"
+#include "engine/modules/injector/PlaneWaveLaserInjector.hpp"
 #include "engine/modules/sorter/ParticleSorter.hpp"
 #include "engine/perf/PipelineProfiler.hpp"
 
 #include <cstdint>
 #include <utility>
 
-template <class FieldSolverT, class GatherT, class PusherT, class DepositT, class FieldBoundaryT, class ParticleBoundaryT, std::size_t BLOCK_SIZE = 64>
+template <class FieldSolverT, class GatherT, class PusherT, class DepositT, class FieldBoundaryT, class ParticleBoundaryT,
+          class FieldInjectorT = pico::modules::injector::NoInjector<64>, std::size_t BLOCK_SIZE = 64>
     requires pico::modules::FieldSolver<FieldSolverT, EMFields<BLOCK_SIZE>, FieldSystem<BLOCK_SIZE>> &&
              pico::modules::Gather<GatherT, particle::ParticleBlock<BLOCK_SIZE>, EMFields<BLOCK_SIZE>, FieldScratch<BLOCK_SIZE>> &&
              pico::modules::Pusher<PusherT, particle::ParticleBlock<BLOCK_SIZE>, FieldScratch<BLOCK_SIZE>> &&
              pico::modules::Deposit<DepositT, particle::ParticleBlock<BLOCK_SIZE>, FieldSystem<BLOCK_SIZE>> &&
              pico::modules::FieldBoundary<FieldBoundaryT, EMFields<BLOCK_SIZE>, FieldSystem<BLOCK_SIZE>> &&
              pico::modules::ParticleBoundary<ParticleBoundaryT, particle::ParticleBlock<BLOCK_SIZE>>
-class PICEngine final : public EngineBase<PICEngine<FieldSolverT, GatherT, PusherT, DepositT, FieldBoundaryT, ParticleBoundaryT, BLOCK_SIZE>>
+class PICEngine final : public EngineBase<PICEngine<FieldSolverT, GatherT, PusherT, DepositT, FieldBoundaryT, ParticleBoundaryT, FieldInjectorT, BLOCK_SIZE>>
 {
 public:
     // Move Semantics
@@ -30,45 +32,52 @@ public:
     PICEngine(const PICEngine&)                = delete;
     PICEngine& operator=(const PICEngine&)     = delete;
 
-    // 1. Grid + PPC Constructor (Constant density n0)
-    explicit PICEngine(const Grid& grid, std::size_t particles_per_cell = 10, float n0 = 1.0f) : PICEngine(grid, particles_per_cell, FieldBoundaryT{}, ParticleBoundaryT{}, n0) {}
+    // 1. Grid + PPC Constructor (Constant density n0, default injector)
+    explicit PICEngine(const Grid& grid, std::size_t particles_per_cell = 10, float n0 = 1.0f)
+            : PICEngine(grid, particles_per_cell, FieldBoundaryT{}, ParticleBoundaryT{}, FieldInjectorT{}, n0)
+    {
+    }
 
-    // 2. Full Constructor (Constant density n0 with explicit boundary instances)
-    PICEngine(const Grid& grid, std::size_t particles_per_cell, FieldBoundaryT field_boundary, ParticleBoundaryT particle_boundary, float n0 = 1.0f)
+    // 2. Full Constructor with Boundaries and Field Injector
+    PICEngine(const Grid& grid, std::size_t particles_per_cell, FieldBoundaryT field_boundary, ParticleBoundaryT particle_boundary,
+              FieldInjectorT field_injector = FieldInjectorT{}, float n0 = 1.0f)
             : fields_(grid), current_(grid), scratch_(), particles_(grid.physical_size() * particles_per_cell), field_solver_{}, pusher_{}, gather_{}, deposit_{},
-              field_boundary_(std::move(field_boundary)), particle_boundary_(std::move(particle_boundary)), particles_per_cell_(particles_per_cell)
+              field_boundary_(std::move(field_boundary)), particle_boundary_(std::move(particle_boundary)), field_injector_(std::move(field_injector)),
+              particles_per_cell_(particles_per_cell)
     {
         particles_.set_active(grid.physical_size() * particles_per_cell);
         particles_.init_positions_uniform(grid);
-        particles_.init_velocities_cold(0.01f, 0.0f, 0.0f);
+        particles_.init_velocities_cold(0.0f, 0.0f, 0.0f);
         particles_.init_density_constant(n0);
     }
 
-    // 3. Density Profile Constructor (Accepts density lambda/functor)
+    // 3. Density Profile Constructor
     template <typename DensityFunc>
     PICEngine(const Grid& grid, std::size_t particles_per_cell, DensityFunc&& density_fn, FieldBoundaryT field_boundary = FieldBoundaryT{},
-              ParticleBoundaryT particle_boundary = ParticleBoundaryT{})
+              ParticleBoundaryT particle_boundary = ParticleBoundaryT{}, FieldInjectorT field_injector = FieldInjectorT{})
             : fields_(grid), current_(grid), scratch_(), particles_(grid.physical_size() * particles_per_cell), field_solver_{}, pusher_{}, gather_{}, deposit_{},
-              field_boundary_(std::move(field_boundary)), particle_boundary_(std::move(particle_boundary)), particles_per_cell_(particles_per_cell)
+              field_boundary_(std::move(field_boundary)), particle_boundary_(std::move(particle_boundary)), field_injector_(std::move(field_injector)),
+              particles_per_cell_(particles_per_cell)
     {
         particles_.set_active(grid.physical_size() * particles_per_cell);
         particles_.init_positions_uniform(grid);
-        particles_.init_velocities_cold(0.01f, 0.0f, 0.0f);
+        particles_.init_velocities_cold(0.0f, 0.0f, 0.0f);
         particles_.init_density_profile(grid, std::forward<DensityFunc>(density_fn));
     }
 
     // 4. Constructor with Pre-constructed ParticleSystem
     PICEngine(const Grid& grid, particle::ParticleSystem<BLOCK_SIZE> particles, FieldBoundaryT field_boundary = FieldBoundaryT{},
-              ParticleBoundaryT particle_boundary = ParticleBoundaryT{})
+              ParticleBoundaryT particle_boundary = ParticleBoundaryT{}, FieldInjectorT field_injector = FieldInjectorT{})
             : fields_(grid), current_(grid), scratch_(), particles_(std::move(particles)), field_solver_{}, pusher_{}, gather_{}, deposit_{},
-              field_boundary_(std::move(field_boundary)), particle_boundary_(std::move(particle_boundary)),
+              field_boundary_(std::move(field_boundary)), particle_boundary_(std::move(particle_boundary)), field_injector_(std::move(field_injector)),
               particles_per_cell_(particles_.active_particles() / grid.physical_size())
     {
     }
 
     void advance_impl(double dt)
     {
-        const Grid& grid = fields_.E.grid();
+        const Grid&  grid         = fields_.E.grid();
+        const double current_time = static_cast<double>(step_counter_) * dt;
 
         if (step_counter_ % sort_frequency_ == 0)
         {
@@ -134,6 +143,7 @@ public:
         {
             auto timer = profiler_.time_stage(pico::perf::Stage::FieldSolver);
             field_solver_.solve(fields_, current_, dt);
+            field_injector_.inject(fields_, current_time, dt);
         }
 
         ++step_counter_;
@@ -213,6 +223,7 @@ private:
     DepositT                                          deposit_;
     FieldBoundaryT                                    field_boundary_;
     ParticleBoundaryT                                 particle_boundary_;
+    FieldInjectorT                                    field_injector_;
     pico::modules::sorter::ParticleSorter<BLOCK_SIZE> sorter_;
 
     std::size_t particles_per_cell_{10};

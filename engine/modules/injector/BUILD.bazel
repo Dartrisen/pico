@@ -1,0 +1,12 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "injector",
+    hdrs = [
+        "PlaneWaveLaserInjector.hpp",
+    ],
+    deps = [
+        "//data/field:field",
+    ],
+    visibility = ["//engine:__pkg__", "//visibility:public"],
+)
