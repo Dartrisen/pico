@@ -40,8 +40,9 @@
 # debug information files
 *.dwo
 
-# Bazel output directories
+# Bazel output directories and locks
 bazel-*
+MODULE.bazel.lock
 
 # IDE-specific settings
 .vscode/
