@@ -20,10 +20,11 @@ int main()
 {
     constexpr std::size_t grid_cells = 256;
     constexpr double      dx         = 0.1;
-    constexpr double      dt         = 0.002; // Resolved timestep: w_p * dt ~ 0.063 << 1
+    constexpr double      dt         = 0.002;
     constexpr std::size_t ppc        = 100;
     constexpr std::size_t nsteps     = 1000;
     constexpr std::size_t BS         = 64;
+    constexpr float       target_n0  = 2.0f; // Target density multiplier
 
     assert(dx > 0.95 * dt && "CFL condition violated.");
 
@@ -39,10 +40,10 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, BS>;
 
-    EngineT engine_instance{grid, ppc};
+    // 1. Initialize Engine with custom density n0 = 2.0
+    EngineT engine_instance{grid, ppc, target_n0};
 
     auto& particles = engine_instance.particles();
-    particles.set_active(grid_cells * ppc);
 
     const double L          = static_cast<double>(grid_cells) * dx;
     const double k          = 2.0 * std::numbers::pi / L;
@@ -50,6 +51,7 @@ int main()
     const double dx_p       = L / static_cast<double>(particles.active_particles());
     std::size_t  global_idx = 0;
 
+    // 2. Apply velocity perturbation (Preserve charge and mass initialized by engine)
     for (auto& block : particles)
     {
         for (std::size_t i = 0; i < block.activeCount; ++i, ++global_idx)
@@ -57,18 +59,20 @@ int main()
             const double x0 = (static_cast<double>(global_idx) + 0.5) * dx_p;
 
             block.position_x[i] = static_cast<float>(x0);
-            block.momentum_x[i] = v0 * std::sin(static_cast<float>(k * x0));
+
+            // p = m * v (where m is already scaled by target_n0 in init_density_constant)
+            const float local_m = block.mass[i];
+            block.momentum_x[i] = local_m * v0 * std::sin(static_cast<float>(k * x0));
             block.momentum_y[i] = 0.0f;
             block.momentum_z[i] = 0.0f;
-            block.charge[i]     = -1.0f; // Physical charge
-            block.mass[i]       = 1.0f;
         }
     }
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
 
-    pico::diagnostics::PlasmaWaveVerifier verifier(dt, dx, ppc);
+    // 3. Construct verifier with matching n0
+    pico::diagnostics::PlasmaWaveVerifier verifier(dt, dx, ppc, target_n0);
 
     std::unique_ptr<IEngine> engine = std::move(wrapper);
     PICApp                   app(std::move(engine), dt);
@@ -96,11 +100,10 @@ int main()
                     const float bx = eng.fields().B.field_x(i);
                     const float by = eng.fields().B.field_y(i);
                     const float bz = eng.fields().B.field_z(i);
-                    e_field +=
-                            0.5 * static_cast<double>(ex * ex + ey * ey + ez * ez + bx * bx + by * by + bz * bz) * dx;
+                    e_field += 0.5 * static_cast<double>(ex * ex + ey * ey + ez * ez + bx * bx + by * by + bz * bz) * dx;
                 }
 
-                // Kinetic Energy (Weighted by w = 1 / ppc)
+                // Kinetic Energy (Scaled by macroparticle weight w = 1 / ppc)
                 double       e_kin  = 0.0;
                 const double weight = 1.0 / static_cast<double>(ppc);
                 for (const auto& block : eng.particles())
@@ -121,7 +124,7 @@ int main()
 
     const auto res = verifier.verify(/*drift_tol=*/2.0, /*freq_tol=*/5.0);
 
-    std::cout << "\n=== Automated Physics Verification ===\n";
+    std::cout << "\n=== Automated Physics Verification (n0 = " << target_n0 << ") ===\n";
     std::cout << " Max Energy Drift : " << res.max_energy_drift_pct << " %\n";
     std::cout << " Measured Frequency: " << res.measured_freq << " rad/s\n";
     std::cout << " Expected Frequency: " << res.expected_freq << " rad/s\n";

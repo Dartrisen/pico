@@ -21,12 +21,11 @@ struct VerificationResult
 class PlasmaWaveVerifier
 {
 public:
-    PlasmaWaveVerifier(double dt, double dx, std::size_t ppc) : dt_(dt), dx_(dx), ppc_(ppc)
+    PlasmaWaveVerifier(double dt, double dx, std::size_t ppc, double n0 = 1.0) : dt_(dt), dx_(dx), ppc_(ppc), n0_(n0)
     {
-        // Deposit uses weight w = 1 / ppc.
-        // Physical particle density n_0 = (ppc * w) / dx = 1 / dx
-        const double n0 = 1.0 / dx_;
-        expected_wp_    = std::sqrt(n0); // w_p = sqrt(10.0) ~ 3.16228 rad/s
+        // Physical density n_eff = n0 / dx
+        // Plasma frequency w_p = sqrt(n_eff) = sqrt(n0 / dx)
+        expected_wp_ = std::sqrt(n0_ / dx_);
     }
 
     void record_step(double e_ex_field, double total_energy)
@@ -65,8 +64,7 @@ public:
 
         for (std::size_t i = 2; i < ex_energies_.size() - 2; ++i)
         {
-            if (ex_energies_[i] > threshold && ex_energies_[i] >= ex_energies_[i - 1] &&
-                ex_energies_[i] >= ex_energies_[i - 2] && ex_energies_[i] >= ex_energies_[i + 1] &&
+            if (ex_energies_[i] > threshold && ex_energies_[i] >= ex_energies_[i - 1] && ex_energies_[i] >= ex_energies_[i - 2] && ex_energies_[i] >= ex_energies_[i + 1] &&
                 ex_energies_[i] >= ex_energies_[i + 2])
             {
                 const double t_curr = i * dt_;
@@ -100,6 +98,7 @@ private:
     double              dt_;
     double              dx_;
     std::size_t         ppc_;
+    double              n0_;
     double              expected_wp_;
     std::vector<double> ex_energies_;
     std::vector<double> total_energies_;
