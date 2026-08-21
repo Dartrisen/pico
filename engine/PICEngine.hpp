@@ -8,8 +8,8 @@
 #include "engine/modules/boundary/SilverMuller.hpp"
 #include "engine/modules/boundary/Thermalizing.hpp"
 #include "engine/modules/concepts.hpp"
-#include "engine/modules/diagnostics/PerfTracker.hpp"
 #include "engine/modules/sorter/ParticleSorter.hpp"
+#include "engine/perf/PipelineProfiler.hpp"
 
 #include <cstdint>
 
@@ -27,7 +27,13 @@ class PICEngine final
                   PICEngine<FieldSolverT, GatherT, PusherT, DepositT, FieldBoundaryT, ParticleBoundaryT, BLOCK_SIZE>>
 {
 public:
-    // Grid + PPC constructor (Default-constructs template boundary types)
+    // move Semantics
+    PICEngine(PICEngine&&) noexcept            = default;
+    PICEngine& operator=(PICEngine&&) noexcept = default;
+    PICEngine(const PICEngine&)                = delete;
+    PICEngine& operator=(const PICEngine&)     = delete;
+
+    // grid + ppc constructor (Default-constructs template boundary types)
     explicit PICEngine(const Grid& grid, std::size_t particles_per_cell = 10)
             : PICEngine(grid, particles_per_cell, FieldBoundaryT{}, ParticleBoundaryT{})
     {
@@ -58,13 +64,11 @@ public:
 
     void advance_impl(double dt)
     {
-        const Grid&                    grid = fields_.E.grid();
-        pico::diagnostics::ScopedTimer step_timer(stats_.step_total_ns);
+        const Grid& grid = fields_.E.grid();
 
-        // Re-sort particles every 50 timesteps to restore cache locality
-        if (step_counter_ % sort_frequency_ == 0)
+        if (step_counter_ % 50 == 0)
         {
-            pico::diagnostics::ScopedTimer timer(stats_.sort_ns);
+            auto timer = profiler_.time_stage(pico::perf::Stage::Sorting);
             for (auto& block : particles_)
             {
                 sorter_.sort_block(block, grid);
@@ -72,65 +76,91 @@ public:
         }
 
         {
-            pico::diagnostics::ScopedTimer timer(stats_.field_boundary_ns);
+            auto timer = profiler_.time_stage(pico::perf::Stage::Boundaries);
             field_boundary_.fill_field_guards(fields_, grid);
         }
 
-        // reset grid currents
         current_.zero_out();
 
-        // clang-format off
-        // block-by-block PIC iteration
-        #pragma omp parallel for schedule(static)
-        // clang-format on
-        for (auto& block : particles_)
+// Fused OpenMP block loop with phase-level timing
+#pragma omp parallel
         {
+            std::uint64_t local_gather_ns  = 0;
+            std::uint64_t local_push_ns    = 0;
+            std::uint64_t local_deposit_ns = 0;
+
+#pragma omp for schedule(static)
+            for (auto& block : particles_)
             {
-                pico::diagnostics::ScopedTimer timer(stats_.gather_ns);
+                using clock = pico::perf::PipelineProfiler::clock;
+
+                // 1. Field Gather Phase
+                const auto t0 = clock::now();
                 gather_.gather_block(block, fields_, grid, scratch_);
-            }
-            {
-                pico::diagnostics::ScopedTimer timer(stats_.push_ns);
+
+                // 2. Boris Push & Particle Boundary Phase
+                const auto t1 = clock::now();
                 pusher_.push_block(block, scratch_, dt);
-            }
-            {
-                pico::diagnostics::ScopedTimer timer(stats_.particle_boundary_ns);
                 particle_boundary_.apply(block, grid);
-            }
-            {
-                pico::diagnostics::ScopedTimer timer(stats_.deposit_ns);
+
+                // 3. Current Deposit Phase
+                const auto t2 = clock::now();
                 deposit_.deposit_block(block, current_, grid, dt, particles_per_cell_);
+
+                const auto t3 = clock::now();
+
+                local_gather_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
+                local_push_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
+                local_deposit_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t3 - t2).count();
             }
+
+            // Lock-free thread accumulation
+            profiler_.add_nanoseconds(pico::perf::Stage::Gather, local_gather_ns);
+            profiler_.add_nanoseconds(pico::perf::Stage::Pusher, local_push_ns);
+            profiler_.add_nanoseconds(pico::perf::Stage::Deposit, local_deposit_ns);
         }
 
-        // fold guard cell currents into physical mesh
         {
-            pico::diagnostics::ScopedTimer timer(stats_.field_boundary_ns);
+            auto timer = profiler_.time_stage(pico::perf::Stage::Boundaries);
             field_boundary_.fold_currents(current_, grid);
         }
 
-        // field solver
         {
-            pico::diagnostics::ScopedTimer timer(stats_.field_solver_ns);
+            auto timer = profiler_.time_stage(pico::perf::Stage::FieldSolver);
             field_solver_.solve(fields_, current_, dt);
         }
 
         ++step_counter_;
     }
 
-    // Diagnostics Interface
-    const pico::diagnostics::PerfStats& stats() const noexcept
+    // Diagnostics & Profiling Interface
+    const pico::perf::PipelineProfiler& profiler() const noexcept
     {
-        return stats_;
+        return profiler_;
     }
+
+    void reset_profiler() noexcept
+    {
+        profiler_.reset();
+        step_counter_ = 0;
+    }
+
     void print_perf_report() const
     {
-        stats_.print_report(particles_.max_particles(), step_counter_);
-    }
-    void reset_perf_stats()
-    {
-        stats_.reset();
-        step_counter_ = 0;
+        const double total_t = profiler_.total_seconds();
+
+        std::cout << "\n--- Engine Profiler Summary (" << step_counter_ << " steps) ---\n";
+        for (std::size_t i = 0; i < static_cast<std::size_t>(pico::perf::Stage::Count); ++i)
+        {
+            const auto   stage = static_cast<pico::perf::Stage>(i);
+            const double t     = profiler_.seconds(stage);
+            const double pct   = (total_t > 0.0) ? (t / total_t) * 100.0 : 0.0;
+
+            std::cout << std::left << std::setw(36) << pico::perf::STAGE_NAMES[i] << ": " << std::right << std::setw(12)
+                      << pico::perf::PipelineProfiler::format_time(t) << " (" << std::fixed << std::setprecision(1)
+                      << std::setw(5) << pct << "%)\n";
+        }
+        std::cout << "---------------------------------------------\n";
     }
 
     // State Accessors
@@ -182,7 +212,7 @@ private:
 
     uint32_t particles_per_cell_{10};
 
-    pico::diagnostics::PerfStats stats_{};
+    pico::perf::PipelineProfiler profiler_{};
     std::size_t                  step_counter_{0};
     std::size_t                  sort_frequency_{50};
 };

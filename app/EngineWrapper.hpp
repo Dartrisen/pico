@@ -8,16 +8,11 @@ template <class EngineT>
 class EngineWrapper final : public IEngine
 {
 public:
-    explicit EngineWrapper(EngineT engine) : engine_(std::move(engine)) {}
+    explicit EngineWrapper(EngineT&& engine) : engine_(std::move(engine)) {}
 
     void advance(double dt) override
     {
         engine_.advance(dt);
-    }
-
-    void print_perf_report() const override
-    {
-        engine_.print_perf_report();
     }
 
     std::size_t total_particles() const override
@@ -30,7 +25,11 @@ public:
         return engine_.fields().E.grid().physical_size();
     }
 
-    // Direct accessor for benchmark-specific tasks
+    const pico::perf::PipelineProfiler& profiler() const override
+    {
+        return engine_.profiler();
+    }
+
     EngineT& engine() noexcept
     {
         return engine_;

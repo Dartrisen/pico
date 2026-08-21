@@ -14,7 +14,7 @@ cc_library(
         "//engine/modules/deposit",
         "//engine/modules/boundary",
         "//engine/modules/sorter",
-        "//engine/modules/diagnostics:tracker",
+        "//engine/perf:profiler",
     ],
     visibility = ["//visibility:public"],
 )
