@@ -39,4 +39,15 @@ namespace pico::modules
                 { d.deposit_block(block, current, grid, dt, n_ppc) } -> std::same_as<void>;
             };
 
+    template <class B, class FieldsT, class SystemT>
+    concept FieldBoundary = requires(B b, FieldsT& fields, SystemT& system, const Grid& grid) {
+        { b.fill_field_guards(fields, grid) } -> std::same_as<void>;
+        { b.fold_currents(system, grid) } -> std::same_as<void>;
+    };
+
+    template <class B, class BlockT>
+    concept ParticleBoundary = requires(B b, BlockT& block, const Grid& grid) {
+        { b.apply(block, grid) } -> std::same_as<void>;
+    };
+
 } // namespace pico::modules
