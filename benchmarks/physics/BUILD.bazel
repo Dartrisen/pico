@@ -35,3 +35,15 @@ cc_binary(
         "//app:ui_verification_report",
     ],
 )
+
+cc_binary(
+    name = "laser_propagation",
+    srcs = ["laser_propagation.cpp"],
+    copts = ["-std=c++20", "-faligned-allocation", "-O3", "-march=native"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//app:ui_verification_report",
+    ],
+)
