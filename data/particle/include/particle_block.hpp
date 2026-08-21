@@ -20,23 +20,24 @@ enum class MomentumComp : uint8_t
 template <size_t BLOCK_SIZE>
 struct alignas(64) ParticleBlock
 {
-    static constexpr size_t size_x = BLOCK_SIZE;
+    static_assert(BLOCK_SIZE > 0, "BLOCK_SIZE must be greater than 0");
+    static_assert(BLOCK_SIZE % 16 == 0, "BLOCK_SIZE should be a multiple of 16 for 64-byte SIMD alignment");
 
-    // Particle positions
-    std::array<float, size_x> position_x;
+    // --- Spatial Coordinates ---
+    std::array<double, BLOCK_SIZE> position_x;
 
-    // Particle momenta
-    std::array<float, size_x> momentum_x;
-    std::array<float, size_x> momentum_y;
-    std::array<float, size_x> momentum_z;
+    // --- Momentum Components ---
+    std::array<float, BLOCK_SIZE> momentum_x;
+    std::array<float, BLOCK_SIZE> momentum_y;
+    std::array<float, BLOCK_SIZE> momentum_z;
 
-    // Particle properties
-    std::array<float, size_x> weight;
-    std::array<float, size_x> mass;
-    std::array<float, size_x> charge;
+    // --- Particle properties ---
+    std::array<float, BLOCK_SIZE> weight;
+    std::array<float, BLOCK_SIZE> mass;
+    std::array<float, BLOCK_SIZE> charge;
 
-    uint32_t activeCount = 0;
-    uint32_t blockId     = 0;
+    uint32_t activeCount{0};
+    uint32_t blockId{0};
 
     /**
      * @brief Check if block is full
