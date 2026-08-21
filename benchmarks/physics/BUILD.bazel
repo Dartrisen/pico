@@ -7,12 +7,23 @@ cc_binary(
     deps = [
         "//app:app_lib",
         "//engine",
+        "//engine/modules/diagnostics:verifiers",
     ],
 )
 
 cc_binary(
     name = "energy_conservation",
     srcs = ["energy_conservation.cpp"],
+    copts = ["-std=c++20", "-faligned-allocation", "-O3", "-march=native"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+    ],
+)
+
+cc_binary(
+    name = "deposit_and_yee_maxwell",
+    srcs = ["deposit_and_yee_maxwell.cpp"],
     copts = ["-std=c++20", "-faligned-allocation", "-O3", "-march=native"],
     deps = [
         "//app:app_lib",

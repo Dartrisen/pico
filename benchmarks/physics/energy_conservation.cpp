@@ -32,7 +32,7 @@ int main(int argc, char** argv)
     using Push      = pico::modules::pusher::BorisPusher<BS>;
     using Gather    = pico::modules::gather::Gather<Shape, BS>;
     using Dep       = pico::modules::deposit::SimpleDeposit<Shape, BS>;
-    using BoundaryF = pico::modules::boundary::PeriodicBoundaryHandler<BS>;
+    using BoundaryF = pico::modules::boundary::PeriodicBoundaryFieldHandler<BS>;
     using BoundaryP = pico::modules::boundary::ThermalizingParticleBoundary<BS>;
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, BS>;
