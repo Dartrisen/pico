@@ -79,7 +79,7 @@ public:
         const Grid&  grid         = fields_.E.grid();
         const double current_time = static_cast<double>(step_counter_) * dt;
 
-        if (step_counter_ % sort_frequency_ == 0)
+        if (particles_.active_particles() > 0 && step_counter_ % sort_frequency_ == 0)
         {
             auto timer = profiler_.time_stage(pico::perf::Stage::Sorting);
             for (auto& block : particles_)
