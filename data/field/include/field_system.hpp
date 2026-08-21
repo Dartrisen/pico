@@ -96,6 +96,26 @@ public:
         set_fields<field::FieldComp::Z>(0.0f);
     }
 
+    void accumulate(const FieldSystem<BLOCK_SIZE>& other) noexcept
+    {
+        assert(blocks_.size() == other.blocks_.size());
+
+        for (size_t b = 0; b < blocks_.size(); ++b)
+        {
+            auto&       dst = blocks_[b];
+            const auto& src = other.blocks_[b];
+            // clang-format off
+            #pragma omp simd
+            // clang-format on
+            for (size_t i = 0; i < BLOCK_SIZE; ++i)
+            {
+                dst.field_x[i] += src.field_x[i];
+                dst.field_y[i] += src.field_y[i];
+                dst.field_z[i] += src.field_z[i];
+            }
+        }
+    }
+
     // ---- block iteration ----
     template <typename Func>
     [[gnu::always_inline]] void for_each_block(Func&& f) noexcept

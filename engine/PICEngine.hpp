@@ -79,7 +79,7 @@ public:
         const Grid&  grid         = fields_.E.grid();
         const double current_time = static_cast<double>(step_counter_) * dt;
 
-        if (particles_.active_particles() > 0 && step_counter_ % sort_frequency_ == 0)
+        if (particles_.active_particles() > 0 && (step_counter_ % sort_frequency_ == 0))
         {
             auto timer = profiler_.time_stage(pico::perf::Stage::Sorting);
             for (auto& block : particles_)
@@ -94,11 +94,14 @@ public:
         }
 
         current_.zero_out();
-
         // clang-format off
         #pragma omp parallel
         // clang-format on
         {
+            // Thread-local current buffer prevents thread contention
+            FieldSystem<BLOCK_SIZE> thread_current(grid);
+            thread_current.zero_out();
+
             std::uint64_t local_gather_ns  = 0;
             std::uint64_t local_push_ns    = 0;
             std::uint64_t local_deposit_ns = 0;
@@ -109,18 +112,15 @@ public:
             {
                 using clock = pico::perf::PipelineProfiler::clock;
 
-                // 1. Field Gather Phase
                 const auto t0 = clock::now();
                 gather_.gather_block(block, fields_, grid, scratch_);
 
-                // 2. Boris Push & Particle Boundary Phase
                 const auto t1 = clock::now();
                 pusher_.push_block(block, scratch_, dt);
                 particle_boundary_.apply(block, grid);
 
-                // 3. Current Deposit Phase
                 const auto t2 = clock::now();
-                deposit_.deposit_block(block, current_, grid, dt, particles_per_cell_);
+                deposit_.deposit_block(block, thread_current, grid, dt, particles_per_cell_);
 
                 const auto t3 = clock::now();
 
@@ -129,10 +129,17 @@ public:
                 local_deposit_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t3 - t2).count();
             }
 
-            // Lock-free thread accumulation
             profiler_.add_nanoseconds(pico::perf::Stage::Gather, local_gather_ns);
             profiler_.add_nanoseconds(pico::perf::Stage::Pusher, local_push_ns);
             profiler_.add_nanoseconds(pico::perf::Stage::Deposit, local_deposit_ns);
+
+            // Merge thread-local current into global grid safely
+            // clang-format off
+            #pragma omp critical
+            // clang-format on
+            {
+                current_.accumulate(thread_current);
+            }
         }
 
         {
