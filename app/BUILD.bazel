@@ -9,7 +9,6 @@ cc_library(
         "//kernels/shapes",
     ],
     include_prefix = "",
-    copts = ["-O3", "-march=native"],
     visibility = ["//visibility:public"],
 )
 
@@ -36,7 +35,6 @@ cc_binary(
         ":app_lib",
         "//engine",
     ],
-    copts = ["-O3", "-march=native", "-std=c++20", "-faligned-allocation"],
     visibility = ["//visibility:public"],
 )
 

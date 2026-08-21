@@ -41,7 +41,7 @@ public:
     // 2. Full Constructor with Boundaries and Field Injector
     PICEngine(const Grid& grid, std::size_t particles_per_cell, FieldBoundaryT field_boundary, ParticleBoundaryT particle_boundary,
               FieldInjectorT field_injector = FieldInjectorT{}, float n0 = 1.0f)
-            : fields_(grid), current_(grid), scratch_(), particles_(grid.physical_size() * particles_per_cell), field_solver_{}, pusher_{}, gather_{}, deposit_{},
+            : fields_(grid), current_(grid), particles_(grid.physical_size() * particles_per_cell), field_solver_{}, pusher_{}, gather_{}, deposit_{},
               field_boundary_(std::move(field_boundary)), particle_boundary_(std::move(particle_boundary)), field_injector_(std::move(field_injector)),
               particles_per_cell_(particles_per_cell)
     {
@@ -55,7 +55,7 @@ public:
     template <typename DensityFunc>
     PICEngine(const Grid& grid, std::size_t particles_per_cell, DensityFunc&& density_fn, FieldBoundaryT field_boundary = FieldBoundaryT{},
               ParticleBoundaryT particle_boundary = ParticleBoundaryT{}, FieldInjectorT field_injector = FieldInjectorT{})
-            : fields_(grid), current_(grid), scratch_(), particles_(grid.physical_size() * particles_per_cell), field_solver_{}, pusher_{}, gather_{}, deposit_{},
+            : fields_(grid), current_(grid), particles_(grid.physical_size() * particles_per_cell), field_solver_{}, pusher_{}, gather_{}, deposit_{},
               field_boundary_(std::move(field_boundary)), particle_boundary_(std::move(particle_boundary)), field_injector_(std::move(field_injector)),
               particles_per_cell_(particles_per_cell)
     {
@@ -68,8 +68,8 @@ public:
     // 4. Constructor with Pre-constructed ParticleSystem
     PICEngine(const Grid& grid, particle::ParticleSystem<BLOCK_SIZE> particles, FieldBoundaryT field_boundary = FieldBoundaryT{},
               ParticleBoundaryT particle_boundary = ParticleBoundaryT{}, FieldInjectorT field_injector = FieldInjectorT{})
-            : fields_(grid), current_(grid), scratch_(), particles_(std::move(particles)), field_solver_{}, pusher_{}, gather_{}, deposit_{},
-              field_boundary_(std::move(field_boundary)), particle_boundary_(std::move(particle_boundary)), field_injector_(std::move(field_injector)),
+            : fields_(grid), current_(grid), particles_(std::move(particles)), field_solver_{}, pusher_{}, gather_{}, deposit_{}, field_boundary_(std::move(field_boundary)),
+              particle_boundary_(std::move(particle_boundary)), field_injector_(std::move(field_injector)),
               particles_per_cell_(particles_.active_particles() / grid.physical_size())
     {
     }
@@ -98,9 +98,10 @@ public:
         #pragma omp parallel
         // clang-format on
         {
-            // Thread-local current buffer prevents thread contention
             FieldSystem<BLOCK_SIZE> thread_current(grid);
             thread_current.zero_out();
+
+            FieldScratch<BLOCK_SIZE> thread_scratch;
 
             std::uint64_t local_gather_ns  = 0;
             std::uint64_t local_push_ns    = 0;
@@ -113,10 +114,10 @@ public:
                 using clock = pico::perf::PipelineProfiler::clock;
 
                 const auto t0 = clock::now();
-                gather_.gather_block(block, fields_, grid, scratch_);
+                gather_.gather_block(block, fields_, grid, thread_scratch);
 
                 const auto t1 = clock::now();
-                pusher_.push_block(block, scratch_, dt);
+                pusher_.push_block(block, thread_scratch, dt);
                 particle_boundary_.apply(block, grid);
 
                 const auto t2 = clock::now();
@@ -132,8 +133,6 @@ public:
             profiler_.add_nanoseconds(pico::perf::Stage::Gather, local_gather_ns);
             profiler_.add_nanoseconds(pico::perf::Stage::Pusher, local_push_ns);
             profiler_.add_nanoseconds(pico::perf::Stage::Deposit, local_deposit_ns);
-
-            // Merge thread-local current into global grid safely
             // clang-format off
             #pragma omp critical
             // clang-format on
@@ -221,7 +220,6 @@ public:
 private:
     EMFields<BLOCK_SIZE>                 fields_;
     FieldSystem<BLOCK_SIZE>              current_;
-    FieldScratch<BLOCK_SIZE>             scratch_;
     particle::ParticleSystem<BLOCK_SIZE> particles_;
 
     FieldSolverT                                      field_solver_;

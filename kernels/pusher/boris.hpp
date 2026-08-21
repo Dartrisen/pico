@@ -14,7 +14,6 @@ struct BorisPusher
         const float half_dt = 0.5f * dt;
         // clang-format off
         #pragma omp simd
-        #pragma clang loop vectorize(enable) interleave(enable)
         // clang-format on
         for (size_t p = 0; p < pb.activeCount; ++p)
         {

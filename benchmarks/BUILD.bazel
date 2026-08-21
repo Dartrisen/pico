@@ -3,7 +3,6 @@ load("@rules_cc//cc:defs.bzl", "cc_library", "cc_binary")
 cc_library(
     name = "bench_core",
     hdrs = glob(["core/*.hpp"]),
-    copts = ["-O3", "-march=native", "-std=c++20"],
     visibility = ["//bench:__subpackages__"],
 )
 
@@ -15,7 +14,6 @@ cc_binary(
         "//data",
         "//kernels",
     ],
-    copts = ["-O3", "-march=native", "-std=c++20"],
     visibility = ["//visibility:public"],
 )
 
@@ -27,7 +25,6 @@ cc_binary(
         "//data",
         "//kernels",
     ],
-    copts = ["-O3", "-march=native", "-std=c++20"],
     visibility = ["//visibility:public"],
 )
 
@@ -38,7 +35,6 @@ cc_binary(
         ":bench_core",
         "//data",
     ],
-    copts = ["-O3", "-march=native", "-std=c++20"],
     visibility = ["//visibility:public"],
 )
 
@@ -49,7 +45,6 @@ cc_binary(
         ":bench_core",
         "//data",
     ],
-    copts = ["-O3", "-march=native", "-std=c++20"],
     visibility = ["//visibility:public"],
 )
 
@@ -59,7 +54,6 @@ cc_binary(
     deps = [
         ":bench_core",
     ],
-    copts = ["-O3", "-march=native", "-std=c++20"],
     visibility = ["//visibility:public"],
 )
 
@@ -71,6 +65,5 @@ cc_binary(
         "//data",
         "//kernels",
     ],
-    copts = ["-O3", "-march=native", "-std=c++20"],
     visibility = ["//visibility:public"],
 )
