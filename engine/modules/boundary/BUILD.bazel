@@ -3,7 +3,8 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 cc_library(
     name = "boundary",
     hdrs = [
-        "PeriodicBoundary.hpp",
+        "PeriodicFieldBoundary.hpp",
+        "PeriodicParticleBoundary.hpp",
         "Thermalizing.hpp",
         "SilverMuller.hpp",
     ],

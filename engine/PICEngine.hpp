@@ -4,7 +4,7 @@
 #include "data/field/include/field_em.hpp"
 #include "data/field/include/field_system.hpp"
 #include "data/particle/include/particle_system.hpp"
-#include "engine/modules/boundary/PeriodicBoundary.hpp"
+#include "engine/modules/boundary/PeriodicFieldBoundary.hpp"
 #include "engine/modules/boundary/SilverMuller.hpp"
 #include "engine/modules/boundary/Thermalizing.hpp"
 #include "engine/modules/concepts.hpp"

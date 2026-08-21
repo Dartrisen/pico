@@ -8,7 +8,7 @@ namespace pico::modules::boundary
 {
 
 template <std::size_t BLOCK_SIZE>
-struct PeriodicBoundaryHandler
+struct PeriodicBoundaryFieldHandler
 {
     // 1. Fold guard cell currents into physical domain, then reset guard cells
     static void fold_currents(FieldSystem<BLOCK_SIZE>& J, const Grid& grid)

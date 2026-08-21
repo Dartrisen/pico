@@ -3,29 +3,42 @@
 #include "IEngine.hpp"
 #include "app/SimMonitor.hpp"
 
+#include <functional>
 #include <memory>
 #include <utility>
 
 class PICApp
 {
 public:
+    using StepCallback = std::function<void(int step)>;
+
     explicit PICApp(std::unique_ptr<IEngine> engine, double dt, int log_interval = 50)
             : engine_(std::move(engine)), dt_(dt), log_interval_(log_interval)
     {
     }
 
-    void run(int nsteps)
+    void run(int nsteps, StepCallback on_step = nullptr)
     {
         monitor_.start(*engine_, dt_, nsteps, log_interval_);
 
         for (int step = 0; step < nsteps; ++step)
         {
+            if (on_step)
+            {
+                on_step(step);
+            }
+
             if (step % log_interval_ == 0 && step > 0)
             {
                 monitor_.log_step(step, *engine_);
             }
 
             engine_->advance(dt_);
+        }
+
+        if (on_step)
+        {
+            on_step(nsteps);
         }
 
         monitor_.log_step(nsteps, *engine_);
