@@ -12,8 +12,7 @@ namespace particle
 {
 
 template <size_t BLOCK_SIZE>
-ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles)
-        : maxParticles_(maxParticles), numBlocks_((maxParticles + BLOCK_SIZE - 1) / BLOCK_SIZE)
+ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles) : maxParticles_(maxParticles), numBlocks_((maxParticles + BLOCK_SIZE - 1) / BLOCK_SIZE)
 {
     if (numBlocks_ == 0)
         throw std::bad_alloc();
@@ -21,8 +20,7 @@ ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles)
     const size_t blocksBytes = numBlocks_ * sizeof(particle::ParticleBlock<BLOCK_SIZE>);
 
     // aligned allocation for blocks_ (raw memory)
-    blocks_ = static_cast<particle::ParticleBlock<BLOCK_SIZE>*>(
-            ::operator new[](blocksBytes, std::align_val_t(CACHE_LINE)));
+    blocks_ = static_cast<particle::ParticleBlock<BLOCK_SIZE>*>(::operator new[](blocksBytes, std::align_val_t(CACHE_LINE)));
 
     std::uninitialized_value_construct_n(blocks_, numBlocks_);
 
@@ -49,8 +47,7 @@ ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles, float charge, fl
 
 template <size_t BLOCK_SIZE>
 ParticleSystem<BLOCK_SIZE>::ParticleSystem(ParticleSystem&& other) noexcept
-        : maxParticles_(other.maxParticles_), numBlocks_(other.numBlocks_), activeParticles_(other.activeParticles_),
-          blocks_(other.blocks_)
+        : maxParticles_(other.maxParticles_), numBlocks_(other.numBlocks_), activeParticles_(other.activeParticles_), blocks_(other.blocks_)
 {
     other.blocks_          = nullptr;
     other.maxParticles_    = 0;
@@ -164,8 +161,7 @@ void ParticleSystem<BLOCK_SIZE>::init_velocities_cold(float vx, float vy, float 
 }
 
 template <size_t BLOCK_SIZE>
-void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th, float v_drift_x, float v_drift_y, float v_drift_z,
-                                                         uint32_t seed)
+void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th, float v_drift_x, float v_drift_y, float v_drift_z, uint32_t seed)
 {
     std::mt19937                    gen(seed);
     std::normal_distribution<float> dist(0.0f, v_th);
@@ -178,6 +174,41 @@ void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th, float v_dri
             block.momentum_x[i] = v_drift_x + dist(gen);
             block.momentum_y[i] = v_drift_y + dist(gen);
             block.momentum_z[i] = v_drift_z + dist(gen);
+        }
+    }
+}
+
+template <size_t BLOCK_SIZE>
+void ParticleSystem<BLOCK_SIZE>::init_density_constant(float n0, float base_charge, float base_mass)
+{
+    for (size_t b = 0; b < numBlocks_; ++b)
+    {
+        auto& block = blocks_[b];
+        for (size_t i = 0; i < block.activeCount; ++i)
+        {
+            block.charge[i] = base_charge * n0;
+            block.mass[i]   = base_mass * n0;
+        }
+    }
+}
+
+template <size_t BLOCK_SIZE>
+template <typename DensityFunc>
+void ParticleSystem<BLOCK_SIZE>::init_density_profile(const Grid& grid, DensityFunc&& density_fn, float base_charge, float base_mass)
+{
+    size_t       global_idx = 0;
+    const double dx_p       = grid.physical_size() / static_cast<double>(activeParticles_);
+
+    for (size_t b = 0; b < numBlocks_; ++b)
+    {
+        auto& block = blocks_[b];
+        for (size_t i = 0; i < block.activeCount; ++i, ++global_idx)
+        {
+            const double x0      = (static_cast<double>(global_idx) + 0.5) * dx_p;
+            const float  local_n = static_cast<float>(density_fn(x0));
+
+            block.charge[i] = base_charge * local_n;
+            block.mass[i]   = base_mass * local_n;
         }
     }
 }
