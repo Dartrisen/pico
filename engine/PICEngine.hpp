@@ -8,6 +8,8 @@
 #include "engine/modules/boundary/SilverMuller.hpp"
 #include "engine/modules/boundary/Thermalizing.hpp"
 #include "engine/modules/concepts.hpp"
+#include "engine/modules/diagnostics/PerfTracker.hpp"
+#include "engine/modules/sorter/ParticleSorter.hpp"
 
 #include <cstdint>
 
@@ -36,8 +38,7 @@ public:
               ParticleBoundaryT particle_boundary)
             : fields_(grid), current_(grid), scratch_(), particles_(grid.physical_size() * particles_per_cell),
               field_solver_{}, pusher_{}, gather_{}, deposit_{}, field_boundary_(std::move(field_boundary)),
-              particle_boundary_(std::move(particle_boundary)),
-              particles_per_cell_(static_cast<uint32_t>(particles_per_cell))
+              particle_boundary_(std::move(particle_boundary)), particles_per_cell_(particles_per_cell)
     {
         particles_.set_active(grid.physical_size() * particles_per_cell);
         particles_.init_positions_uniform(grid);
@@ -50,37 +51,86 @@ public:
               ParticleBoundaryT particle_boundary = ParticleBoundaryT{})
             : fields_(grid), current_(grid), scratch_(), particles_(std::move(particles)), field_solver_{}, pusher_{},
               gather_{}, deposit_{}, field_boundary_(std::move(field_boundary)),
-              particle_boundary_(std::move(particle_boundary)), particles_per_cell_(10)
+              particle_boundary_(std::move(particle_boundary)),
+              particles_per_cell_(particles_.total_particles() / grid.physical_size())
     {
     }
 
     void advance_impl(double dt)
     {
-        const Grid& grid = fields_.E.grid();
+        const Grid&                    grid = fields_.E.grid();
+        pico::diagnostics::ScopedTimer step_timer(stats_.step_total_ns);
 
-        // fill field guard cells prior to gathering
-        field_boundary_.fill_field_guards(fields_, grid);
+        // Re-sort particles every 50 timesteps to restore cache locality
+        if (step_counter_ % sort_frequency_ == 0)
+        {
+            pico::diagnostics::ScopedTimer timer(stats_.sort_ns);
+            for (auto& block : particles_)
+            {
+                sorter_.sort_block(block, grid);
+            }
+        }
+
+        {
+            pico::diagnostics::ScopedTimer timer(stats_.field_boundary_ns);
+            field_boundary_.fill_field_guards(fields_, grid);
+        }
 
         // reset grid currents
         current_.zero_out();
 
+        // clang-format off
         // block-by-block PIC iteration
+        #pragma omp parallel for schedule(static)
+        // clang-format on
         for (auto& block : particles_)
         {
-            gather_.gather_block(block, fields_, grid, scratch_);
-            pusher_.push_block(block, scratch_, dt);
-
-            // kinetic particle boundary policy post-push
-            particle_boundary_.apply(block, grid);
-
-            deposit_.deposit_block(block, current_, grid, dt, particles_per_cell_);
+            {
+                pico::diagnostics::ScopedTimer timer(stats_.gather_ns);
+                gather_.gather_block(block, fields_, grid, scratch_);
+            }
+            {
+                pico::diagnostics::ScopedTimer timer(stats_.push_ns);
+                pusher_.push_block(block, scratch_, dt);
+            }
+            {
+                pico::diagnostics::ScopedTimer timer(stats_.particle_boundary_ns);
+                particle_boundary_.apply(block, grid);
+            }
+            {
+                pico::diagnostics::ScopedTimer timer(stats_.deposit_ns);
+                deposit_.deposit_block(block, current_, grid, dt, particles_per_cell_);
+            }
         }
 
         // fold guard cell currents into physical mesh
-        field_boundary_.fold_currents(current_, grid);
+        {
+            pico::diagnostics::ScopedTimer timer(stats_.field_boundary_ns);
+            field_boundary_.fold_currents(current_, grid);
+        }
 
-        // solve field equations
-        field_solver_.solve(fields_, current_, dt);
+        // field solver
+        {
+            pico::diagnostics::ScopedTimer timer(stats_.field_solver_ns);
+            field_solver_.solve(fields_, current_, dt);
+        }
+
+        ++step_counter_;
+    }
+
+    // Diagnostics Interface
+    const pico::diagnostics::PerfStats& stats() const noexcept
+    {
+        return stats_;
+    }
+    void print_perf_report() const
+    {
+        stats_.print_report(particles_.max_particles(), step_counter_);
+    }
+    void reset_perf_stats()
+    {
+        stats_.reset();
+        step_counter_ = 0;
     }
 
     // State Accessors
@@ -111,18 +161,28 @@ public:
         return current_;
     }
 
+    std::size_t particles_per_cell() const noexcept
+    {
+        return particles_per_cell_;
+    }
+
 private:
     EMFields<BLOCK_SIZE>                 fields_;
     FieldSystem<BLOCK_SIZE>              current_;
     FieldScratch<BLOCK_SIZE>             scratch_;
     particle::ParticleSystem<BLOCK_SIZE> particles_;
 
-    FieldSolverT      field_solver_;
-    PusherT           pusher_;
-    GatherT           gather_;
-    DepositT          deposit_;
-    FieldBoundaryT    field_boundary_;
-    ParticleBoundaryT particle_boundary_;
+    FieldSolverT                                      field_solver_;
+    PusherT                                           pusher_;
+    GatherT                                           gather_;
+    DepositT                                          deposit_;
+    FieldBoundaryT                                    field_boundary_;
+    ParticleBoundaryT                                 particle_boundary_;
+    pico::modules::sorter::ParticleSorter<BLOCK_SIZE> sorter_;
 
-    uint32_t particles_per_cell_;
+    uint32_t particles_per_cell_{10};
+
+    pico::diagnostics::PerfStats stats_{};
+    std::size_t                  step_counter_{0};
+    std::size_t                  sort_frequency_{50};
 };
