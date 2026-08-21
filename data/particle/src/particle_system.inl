@@ -14,8 +14,13 @@ namespace particle
 template <size_t BLOCK_SIZE>
 ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles) : maxParticles_(maxParticles), numBlocks_((maxParticles + BLOCK_SIZE - 1) / BLOCK_SIZE)
 {
+    // Allow zero-particle (vacuum) systems without throwing std::bad_alloc
     if (numBlocks_ == 0)
-        throw std::bad_alloc();
+    {
+        blocks_          = nullptr;
+        activeParticles_ = 0;
+        return;
+    }
 
     const size_t blocksBytes = numBlocks_ * sizeof(particle::ParticleBlock<BLOCK_SIZE>);
 
