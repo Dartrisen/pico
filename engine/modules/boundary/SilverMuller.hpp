@@ -14,23 +14,21 @@ struct SilverMullerFieldBoundary
         const std::size_t G = grid.guard_cells();
         const std::size_t N = grid.physical_size();
 
-        // Left Open Boundary: Ey - c*Bz = 0
+        // Left Open Boundary: Absorbs outgoing -x wave (Ey = -c*Bz)
         for (std::size_t g = 0; g < G; ++g)
         {
-            fields.E.field_y(g) = fields.B.field_z(G); // Radiation condition matching
+            fields.E.field_y(g) = -fields.B.field_z(G);
         }
 
-        // Right Open Boundary: Ey + c*Bz = 0
+        // Right Open Boundary: Absorbs outgoing +x wave (Ey = +c*Bz)
         for (std::size_t g = 0; g < G; ++g)
         {
-            fields.E.field_y(N + G + g) = -fields.B.field_z(N + G - 1);
+            fields.E.field_y(N + G + g) = fields.B.field_z(N + G - 1);
         }
     }
 
     static void fold_currents(FieldSystem<BLOCK_SIZE>& J, const Grid& grid)
     {
-        // Non-periodic absorbing boundaries do not fold guard currents back;
-        // guard currents are zeroed out or absorbed at the wall absorber.
         const std::size_t G = grid.guard_cells();
         const std::size_t N = grid.physical_size();
 
