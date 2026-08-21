@@ -11,8 +11,9 @@ cc_library(
 cc_library(
     name = "verifiers",
     hdrs = [
-        "PlasmaWaveVerifier.hpp"
+        "PlasmaWaveVerifier.hpp",
+        "EnergyVerifier.hpp",
+        "CurrentVerifier.hpp",
     ],
     visibility = ["//visibility:public"],
-
 )

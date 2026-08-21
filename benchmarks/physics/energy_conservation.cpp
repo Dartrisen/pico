@@ -1,8 +1,12 @@
 #include "app/EngineWrapper.hpp"
 #include "app/PICApp.hpp"
+#include "app/VerificationReport.hpp"
 #include "data/grid/include/grid.hpp"
 #include "engine/PICEngine.hpp"
+#include "engine/modules/boundary/PeriodicFieldBoundary.hpp"
+#include "engine/modules/boundary/Thermalizing.hpp"
 #include "engine/modules/deposit/Deposit.hpp"
+#include "engine/modules/diagnostics/EnergyVerifier.hpp"
 #include "engine/modules/field/YeeMaxwell.hpp"
 #include "engine/modules/gather/Gather.hpp"
 #include "engine/modules/pusher/BorisPusher.hpp"
@@ -18,7 +22,7 @@ int main(int argc, char** argv)
     // 1. Simulation Parameters
     constexpr std::size_t grid_cells = 256;
     constexpr double      dx         = 0.1;
-    constexpr double      dt         = 0.02;
+    constexpr double      dt         = 0.002;
     constexpr std::size_t ppc        = 100;
     constexpr std::size_t nsteps     = 1000;
     constexpr std::size_t BS         = 64;
@@ -40,9 +44,8 @@ int main(int argc, char** argv)
     EngineT engine_instance{grid, ppc};
 
     auto& particles = engine_instance.particles();
-    particles.set_active(grid_cells * ppc);
 
-    const double L          = grid_cells * dx;
+    const double L          = static_cast<double>(grid_cells) * dx;
     const double k          = 2.0 * M_PI / L;
     const float  v0         = 0.05f;
     const double dx_p       = L / static_cast<double>(particles.active_particles());
@@ -52,21 +55,76 @@ int main(int argc, char** argv)
     {
         for (std::size_t i = 0; i < block.activeCount; ++i, ++global_idx)
         {
-            const double x0 = (global_idx + 0.5) * dx_p;
+            const double x0 = (static_cast<double>(global_idx) + 0.5) * dx_p;
 
             block.position_x[i] = static_cast<float>(x0);
-            block.momentum_x[i] = v0 * std::sin(static_cast<float>(k * x0));
-            block.momentum_y[i] = v0 * std::cos(static_cast<float>(k * x0));
+
+            // Momentum scaling with mass initialized by the engine
+            const float m       = block.mass[i];
+            block.momentum_x[i] = m * v0 * std::sin(static_cast<float>(k * x0));
+            block.momentum_y[i] = m * v0 * std::cos(static_cast<float>(k * x0));
             block.momentum_z[i] = 0.0f;
-            block.charge[i]     = -1.0f;
-            block.mass[i]       = 1.0f;
         }
     }
 
-    std::unique_ptr<IEngine> engine = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
+    auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
+    auto* concrete_wrapper = wrapper.get();
 
-    PICApp app(std::move(engine), dt);
-    app.run(nsteps);
+    // Energy Conservation Verifier (2.0% tolerance)
+    pico::diagnostics::EnergyVerifier verifier(/*drift_tolerance_pct=*/2.0);
 
-    return 0;
+    std::unique_ptr<IEngine> engine = std::move(wrapper);
+    PICApp                   app(std::move(engine), dt);
+
+    app.run(nsteps,
+            [&](int /*step*/)
+            {
+                const auto& eng = concrete_wrapper->engine();
+
+                // 1. Calculate Electromagnetic Field Energy
+                double e_field = 0.0;
+                for (std::size_t i = 0; i < grid_cells; ++i)
+                {
+                    const float ex = eng.fields().E.field_x(i);
+                    const float ey = eng.fields().E.field_y(i);
+                    const float ez = eng.fields().E.field_z(i);
+                    const float bx = eng.fields().B.field_x(i);
+                    const float by = eng.fields().B.field_y(i);
+                    const float bz = eng.fields().B.field_z(i);
+
+                    e_field += 0.5 * static_cast<double>(ex * ex + ey * ey + ez * ez + bx * bx + by * by + bz * bz) * dx;
+                }
+
+                // 2. Calculate Kinetic Energy (weighted by macroparticle weight w = 1 / ppc)
+                double       e_kin  = 0.0;
+                const double weight = 1.0 / static_cast<double>(ppc);
+
+                for (const auto& block : eng.particles())
+                {
+                    for (std::size_t i = 0; i < block.activeCount; ++i)
+                    {
+                        const double px = block.momentum_x[i];
+                        const double py = block.momentum_y[i];
+                        const double pz = block.momentum_z[i];
+                        const double m  = block.mass[i];
+
+                        e_kin += 0.5 * (px * px + py * py + pz * pz) / m;
+                    }
+                }
+                e_kin *= weight;
+
+                verifier.record_step(e_field, e_kin);
+            });
+
+    const auto res = verifier.verify();
+
+    pico::ui::VerificationReport report("Energy Conservation Verification", res.passed);
+
+    report.add_sci_row("Initial Energy", res.initial_energy, 4, "mc^2");
+    report.add_sci_row("Final Energy", res.final_energy, 4, "mc^2");
+    report.add_pct_row("Max Energy Drift", res.max_energy_drift_pct, res.passed);
+    report.add_pct_row("Avg Energy Drift", res.avg_energy_drift_pct, true);
+
+    report.print();
+    return report.passed() ? 0 : 1;
 }

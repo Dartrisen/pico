@@ -21,7 +21,7 @@ struct VerificationResult
 class PlasmaWaveVerifier
 {
 public:
-    PlasmaWaveVerifier(double dt, double dx, std::size_t ppc, double n0 = 1.0) : dt_(dt), dx_(dx), ppc_(ppc), n0_(n0)
+    PlasmaWaveVerifier(double dt, double dx, std::size_t ppc, double n0 = 1.0) : dt_(dt), dx_(dx), n0_(n0)
     {
         // Physical density n_eff = n0 / dx
         // Plasma frequency w_p = sqrt(n_eff) = sqrt(n0 / dx)
@@ -97,7 +97,6 @@ public:
 private:
     double              dt_;
     double              dx_;
-    std::size_t         ppc_;
     double              n0_;
     double              expected_wp_;
     std::vector<double> ex_energies_;

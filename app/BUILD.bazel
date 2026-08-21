@@ -20,6 +20,15 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
+cc_library(
+    name = "ui_verification_report",
+    hdrs = [
+        "VerificationReport.hpp",
+    ],
+    deps = ["//app:ui_colors"],
+    visibility = ["//visibility:public"],
+)
+
 cc_binary(
     name = "app_bin",
     srcs = ["app.cpp"],
