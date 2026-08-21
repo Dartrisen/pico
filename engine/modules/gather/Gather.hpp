@@ -8,14 +8,14 @@
 namespace pico::modules::gather
 {
 
-    template <class Shape, size_t BLOCK_SIZE>
-    struct Gather
+template <class Shape, size_t BLOCK_SIZE>
+struct Gather
+{
+    void gather_block(const particle::ParticleBlock<BLOCK_SIZE>& block, const EMFields<BLOCK_SIZE>& fields,
+                      const Grid& grid, FieldScratch<BLOCK_SIZE>& scratch)
     {
-        void gather_block(const particle::ParticleBlock<BLOCK_SIZE>& block, const EMFields<BLOCK_SIZE>& fields,
-                          const Grid& grid, FieldScratch<BLOCK_SIZE>& scratch)
-        {
-            kernels::gather::FieldGather<Shape, BLOCK_SIZE>::gather(block, fields, grid, scratch);
-        }
-    };
+        kernels::gather::FieldGather<Shape, BLOCK_SIZE>::gather(block, fields, grid, scratch);
+    }
+};
 
 } // namespace pico::modules::gather

@@ -4,7 +4,8 @@
 
 namespace kernels::shapes
 {
-    template <int Order>
-    using Shape = SplineShape<Order>;
+
+template <int Order>
+using Shape = SplineShape<Order>;
 
 } // namespace kernels::shapes
