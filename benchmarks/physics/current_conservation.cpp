@@ -10,6 +10,7 @@
 #include "engine/modules/diagnostics/EnergyVerifier.hpp"
 #include "engine/modules/field/YeeMaxwell.hpp"
 #include "engine/modules/gather/Gather.hpp"
+#include "engine/modules/injector/PlaneWaveLaserInjector.hpp"
 #include "engine/modules/pusher/BorisPusher.hpp"
 #include "kernels/shapes/shape.hpp"
 
@@ -42,8 +43,9 @@ int main(int argc, char** argv)
     using Dep       = pico::modules::deposit::SimpleDeposit<Shape, BS>;
     using BoundaryF = pico::modules::boundary::PeriodicBoundaryFieldHandler<BS>;
     using BoundaryP = pico::modules::boundary::PeriodicBoundaryParticleHandler<BS>;
+    using Injector  = pico::modules::injector::NoInjector<BS>;
 
-    using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, BS>;
+    using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
     EngineT engine_instance{grid, ppc, target_n0};
 
