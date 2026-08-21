@@ -9,5 +9,9 @@ cc_library(
         "//data/field:field",
         "//data/particle:particle",
     ],
+    copts = [
+        "-O3",                           # Triggers vectorization pipelines
+        "-fopenmp-simd",                 # Parses OpenMP SIMD directives without full OpenMP runtime cost
+    ],
     visibility = ["//visibility:public"],
 )

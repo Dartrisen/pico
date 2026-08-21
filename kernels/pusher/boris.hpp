@@ -12,7 +12,10 @@ struct BorisPusher
     static void push_block(particle::ParticleBlock<BLOCK_SIZE>& pb, const FieldScratch<BLOCK_SIZE>& fs, float dt)
     {
         const float half_dt = 0.5f * dt;
-
+        // clang-format off
+        #pragma omp simd
+        #pragma clang loop vectorize(enable) interleave(enable)
+        // clang-format on
         for (size_t p = 0; p < pb.activeCount; ++p)
         {
             const float q          = pb.charge[p];
