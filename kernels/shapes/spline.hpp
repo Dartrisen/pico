@@ -1,8 +1,6 @@
 #pragma once
 
-#include <array>
 #include <cmath>
-#include <stdexcept>
 
 namespace kernels::shapes
 {
@@ -31,7 +29,7 @@ struct SplineShape
 {
     static constexpr int S = SplineTraits<Order>::support;
 
-    static inline void weights(double x, double dx, int& i0, double (&w)[S])
+    [[gnu::always_inline]] static inline void weights(double x, double dx, int& i0, double (&w)[S])
     {
         const double normalized = x / dx;
         const int    i          = static_cast<int>(std::floor(normalized));

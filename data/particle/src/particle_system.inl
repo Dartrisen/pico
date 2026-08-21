@@ -30,7 +30,7 @@ ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles) : maxParticles_(
     std::uninitialized_value_construct_n(blocks_, numBlocks_);
 
     // debug/info
-    std::cout << "Allocated " << numBlocks_ << " blocks (" << blocksBytes << " bytes).\n";
+    // std::cout << "Allocated " << numBlocks_ << " blocks (" << blocksBytes << " bytes).\n";
 
     for (auto& block : std::span(blocks_, numBlocks_))
     {

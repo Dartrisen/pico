@@ -3,10 +3,10 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 cc_library(
     name = "deposit",
     hdrs = ["deposit.hpp"],
-    visibility = ["//visibility:public"],
     deps = [
         "//data/field:field",
         "//data/grid:grid",
         "//data/particle:particle",
     ],
+    visibility = ["//visibility:public"],
 )
