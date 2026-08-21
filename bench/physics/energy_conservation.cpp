@@ -26,14 +26,15 @@ int main(int argc, char** argv)
     Grid                  grid(grid_cells, dx);
     constexpr std::size_t BS = 64;
 
-    using Shape    = kernels::shapes::Shape<3>;
-    using Field    = pico::modules::field::YeeMaxwell<BS>;
-    using Push     = pico::modules::pusher::BorisPusher<BS>;
-    using Gather   = pico::modules::gather::Gather<Shape, BS>;
-    using Dep      = pico::modules::deposit::SimpleDeposit<Shape, BS>;
-    using Boundary = pico::modules::boundary::PeriodicBoundaryHandler<BS>;
+    using Shape     = kernels::shapes::Shape<3>;
+    using Field     = pico::modules::field::YeeMaxwell<BS>;
+    using Push      = pico::modules::pusher::BorisPusher<BS>;
+    using Gather    = pico::modules::gather::Gather<Shape, BS>;
+    using Dep       = pico::modules::deposit::SimpleDeposit<Shape, BS>;
+    using BoundaryF = pico::modules::boundary::PeriodicBoundaryHandler<BS>;
+    using BoundaryP = pico::modules::boundary::ThermalizingParticleBoundary<BS>;
 
-    using EngineT = PICEngine<Field, Gather, Push, Dep, Boundary, BS>;
+    using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, BS>;
 
     EngineT engine_instance{grid, ppc};
 
