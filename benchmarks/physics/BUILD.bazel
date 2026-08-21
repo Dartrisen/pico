@@ -47,3 +47,27 @@ cc_binary(
         "//app:ui_verification_report",
     ],
 )
+
+cc_binary(
+    name = "heavy_workload",
+    srcs = ["heavy_workload.cpp"],
+    copts = ["-std=c++20", "-faligned-allocation", "-O3", "-march=native"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//app:ui_verification_report",
+    ],
+)
+
+cc_binary(
+    name = "landau_damping",
+    srcs = ["landau_damping.cpp"],
+    copts = ["-std=c++20", "-faligned-allocation", "-O3", "-march=native"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//app:ui_verification_report",
+    ],
+)
