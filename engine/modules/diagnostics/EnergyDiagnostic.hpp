@@ -6,6 +6,7 @@
 
 namespace pico::diagnostics
 {
+
 template <class EngineT>
 class EnergyDiagnostic
 {
@@ -68,4 +69,5 @@ public:
                   << std::defaultfloat << "\n";
     }
 };
+
 } // namespace pico::diagnostics
