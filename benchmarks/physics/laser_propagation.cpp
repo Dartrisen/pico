@@ -19,8 +19,61 @@
 #include <memory>
 #include <vector>
 
+struct StepFieldData
+{
+    double              e_field{0.0};
+    std::vector<double> local_u;
+};
+
+// Computes transverse EM energy density (Ey^2 + Bz^2) and total integrated transverse field energy
+template <typename Engine>
+StepFieldData compute_field_energy(const Engine& eng, const Grid& grid, std::size_t grid_cells, double dx)
+{
+    StepFieldData result;
+    result.local_u.resize(grid_cells, 0.0);
+    const auto& fields = eng.fields();
+
+    for (std::size_t i = 0; i < grid_cells; ++i)
+    {
+        const std::size_t buf_i          = grid.physical_to_buffer(i);
+        const float       ey             = fields.E.field_y(buf_i);
+        const float       bz             = fields.B.field_z(buf_i);
+        const double      energy_density = 0.5 * static_cast<double>(ey * ey + bz * bz);
+
+        result.local_u[i] = energy_density;
+        result.e_field += energy_density * dx;
+    }
+    return result;
+}
+
+// Applies a moving-window smoothing filter over energy density to extract the envelope peak x-position
+double find_envelope_peak_x(const std::vector<double>& local_u, std::size_t grid_cells, double dx, int window_half_width)
+{
+    double      max_env_density = 0.0;
+    std::size_t max_env_idx     = 0;
+
+    const int min_i = window_half_width;
+    const int max_i = static_cast<int>(grid_cells) - window_half_width;
+
+    for (int i = min_i; i < max_i; ++i)
+    {
+        double sum = 0.0;
+        for (int w = -window_half_width; w <= window_half_width; ++w)
+        {
+            sum += local_u[static_cast<std::size_t>(i + w)];
+        }
+        if (sum > max_env_density)
+        {
+            max_env_density = sum;
+            max_env_idx     = static_cast<std::size_t>(i);
+        }
+    }
+    return static_cast<double>(max_env_idx) * dx;
+}
+
 int main()
 {
+    // Simulation Domain & Time Parameters
     constexpr std::size_t grid_cells = 256; // Domain length L = 12.8
     constexpr double      dx         = 0.05;
     constexpr double      dt         = 0.001;
@@ -52,6 +105,7 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
+    // 1. Initialize Laser Engine & Boundary Conditions
     Injector laser_injector(inject_cell, a0, tau, t_peak);
     EngineT  engine_instance{grid, /*ppc=*/0, BoundaryF{}, BoundaryP{}, std::move(laser_injector), /*n0=*/0.0f};
 
@@ -64,49 +118,19 @@ int main()
     double final_field_energy = 0.0;
     double measured_peak_x    = 0.0;
 
+    // 2. Main Simulation Benchmark Loop
     app.run(nsteps,
             [&](int step_idx)
             {
                 const std::size_t step = static_cast<std::size_t>(step_idx);
-                auto&             eng  = concrete_wrapper->engine();
 
-                double              e_field = 0.0;
-                std::vector<double> local_u(grid_cells, 0.0);
-
-                for (std::size_t i = 0; i < grid_cells; ++i)
-                {
-                    const std::size_t buf_i = grid.physical_to_buffer(i);
-                    const float       ey    = eng.fields().E.field_y(buf_i);
-                    const float       bz    = eng.fields().B.field_z(buf_i);
-
-                    const double energy_density = 0.5 * static_cast<double>(ey * ey + bz * bz);
-                    local_u[i]                  = energy_density;
-                    e_field += energy_density * dx;
-                }
-
-                max_field_energy = std::max(max_field_energy, e_field);
+                const auto [e_field, local_u] = compute_field_energy(concrete_wrapper->engine(), grid, grid_cells, dx);
+                max_field_energy              = std::max(max_field_energy, e_field);
 
                 if (step == mid_check_step)
                 {
-                    // Smooth u over optical wavelength (~2*pi / dx cells) to extract pulse envelope
                     constexpr int window_half_width = 30;
-                    double        max_env_density   = 0.0;
-                    std::size_t   max_env_idx       = 0;
-
-                    for (std::size_t i = window_half_width; i < grid_cells - window_half_width; ++i)
-                    {
-                        double sum = 0.0;
-                        for (int w = -window_half_width; w <= window_half_width; ++w)
-                        {
-                            sum += local_u[i + w];
-                        }
-                        if (sum > max_env_density)
-                        {
-                            max_env_density = sum;
-                            max_env_idx     = i;
-                        }
-                    }
-                    measured_peak_x = static_cast<double>(max_env_idx) * dx;
+                    measured_peak_x                 = find_envelope_peak_x(local_u, grid_cells, dx, window_half_width);
                 }
 
                 if (step == nsteps - 1)
@@ -115,12 +139,14 @@ int main()
                 }
             });
 
+    // 3. Verification Metrics & Envelope Tracking Analysis
     const double expected_peak_x = (static_cast<double>(mid_check_step) * dt) - static_cast<double>(t_peak);
     const double pos_error       = std::abs(measured_peak_x - expected_peak_x);
 
     const double reflection_pct = (final_field_energy / max_field_energy) * 100.0;
     const bool   passed         = (reflection_pct < 2.0) && (pos_error <= 2.0 * dx) && (max_field_energy > 0.0);
 
+    // 4. Verification Output Report
     pico::ui::VerificationReport report("Laser Wave Injection & Boundary Absorption Verification", passed);
 
     report.add_sci_row("Peak Transverse Energy", max_field_energy);
