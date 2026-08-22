@@ -84,8 +84,8 @@ int main()
     pico::ui::VerificationReport report("Plasma Wave Physics Verification", res.passed, title_ss.str());
 
     report.add_pct_row("Max Energy Drift", res.max_energy_drift_pct, true);
-    report.add_fixed_row("Measured Frequency (wp)", res.measured_freq, 4, "rad/s");
-    report.add_fixed_row("Expected Frequency (wp)", res.expected_freq, 4, "rad/s");
+    report.add_fixed_row("Measured Frequency (wp)", res.measured_freq, 4, "omega0^-1");
+    report.add_fixed_row("Expected Frequency (wp)", res.expected_freq, 4, "omega0^-1");
     report.add_pct_row("Frequency Error", res.freq_error_pct, res.passed);
 
     report.print();

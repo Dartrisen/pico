@@ -102,12 +102,12 @@ int main()
     report.add_fixed_row("Throughput", mup_s, 2, "MUP/s");
 
     report.add_pct_row("Max Energy Drift", res.max_energy_drift_pct, true);
-    report.add_fixed_row("Measured Frequency (wr)", res.measured_freq, 4, "rad/s");
-    report.add_fixed_row("Expected Frequency (wr)", res.expected_freq, 4, "rad/s");
+    report.add_fixed_row("Measured Frequency (wr)", res.measured_freq, 4, "omega0^-1");
+    report.add_fixed_row("Expected Frequency (wr)", res.expected_freq, 4, "omega0^-1");
     report.add_pct_row("Frequency Error", res.freq_error_pct, res.freq_error_pct <= 5.0);
 
-    report.add_fixed_row("Measured Damping Rate (gamma)", res.measured_gamma, 5, "s^-1");
-    report.add_fixed_row("Expected Damping Rate (gamma)", res.expected_gamma, 5, "s^-1");
+    report.add_fixed_row("Measured Damping Rate (gamma)", res.measured_gamma, 5, "omega0^-1");
+    report.add_fixed_row("Expected Damping Rate (gamma)", res.expected_gamma, 5, "omega0^-1");
     report.add_pct_row("Damping Rate Error", res.gamma_error_pct, res.passed);
 
     report.print();
