@@ -3,6 +3,9 @@
 #include "data/field/include/field_em.hpp"
 #include "data/particle/include/particle_block.hpp"
 
+#include <algorithm>
+#include <cstddef>
+
 namespace kernels::gather
 {
 
@@ -15,20 +18,25 @@ struct FieldGather
 
         const double dx     = grid.cell_size();
         const int    guards = static_cast<int>(grid.guard_cells());
+        const double max_x  = (static_cast<double>(grid.physical_size()) - 1e-7) * dx;
 
         for (std::size_t p = 0; p < pb.activeCount; ++p)
         {
-            const double x = pb.position_x[p];
+            // Clamp x safely inside [0, physical_domain) to guard against float precision overflow
+            const double x = std::clamp(static_cast<double>(pb.position_x[p]), 0.0, max_x);
 
             int    i0_node = 0, i0_half = 0;
             double w_node_d[S]{}, w_half_d[S]{};
 
-            // Call generic shape weights evaluation
             Shape::weights(x, dx, i0_node, w_node_d);
             Shape::weights(x - 0.5 * dx, dx, i0_half, w_half_d);
 
-            const std::size_t half_start = static_cast<std::size_t>(i0_half + guards);
-            const std::size_t node_start = static_cast<std::size_t>(i0_node + guards);
+            // Safe signed index arithmetic before casting to std::size_t
+            const int idx_half = i0_half + guards;
+            const int idx_node = i0_node + guards;
+
+            const std::size_t half_start = static_cast<std::size_t>(std::max(0, idx_half));
+            const std::size_t node_start = static_cast<std::size_t>(std::max(0, idx_node));
 
             float ex = 0.0f, by = 0.0f, bz = 0.0f;
             for (int s = 0; s < S; ++s)
