@@ -8,7 +8,7 @@
 #include "engine/modules/boundary/SilverMuller.hpp"
 #include "engine/modules/boundary/Thermalizing.hpp"
 #include "engine/modules/concepts.hpp"
-#include "engine/modules/injector/PlaneWaveLaserInjector.hpp"
+#include "engine/modules/injector/Injectors.hpp"
 #include "engine/modules/sorter/ParticleSorter.hpp"
 #include "engine/perf/PipelineProfiler.hpp"
 
