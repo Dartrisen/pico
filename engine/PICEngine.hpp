@@ -10,12 +10,26 @@
 #include "engine/modules/concepts.hpp"
 #include "engine/modules/injector/Injectors.hpp"
 #include "engine/modules/sorter/ParticleSorter.hpp"
+#include "engine/perf/CycleClock.hpp"
 #include "engine/perf/LocalityProfiler.hpp"
 #include "engine/perf/PipelineProfiler.hpp"
 
 #include <cstdint>
+#include <omp.h>
 #include <utility>
+#include <vector>
 
+/**
+ * @brief High-performance parallel Particle-in-Cell execution engine.
+ * @tparam FieldSolverT Electromagnetic field solver module.
+ * @tparam GatherT Interpolation module from fields to particles.
+ * @tparam PusherT Particle trajectory integrator.
+ * @tparam DepositT Current deposition module from particles to grid.
+ * @tparam FieldBoundaryT Field boundary condition handler.
+ * @tparam ParticleBoundaryT Particle boundary condition handler.
+ * @tparam FieldInjectorT External field source injector.
+ * @tparam BLOCK_SIZE Number of particles per block unit for SIMD layout.
+ */
 template <class FieldSolverT, class GatherT, class PusherT, class DepositT, class FieldBoundaryT, class ParticleBoundaryT,
           class FieldInjectorT = pico::modules::injector::NoInjector<64>, std::size_t BLOCK_SIZE = 64>
     requires pico::modules::FieldSolver<FieldSolverT, EMFields<BLOCK_SIZE>, FieldSystem<BLOCK_SIZE>> &&
@@ -27,19 +41,16 @@ template <class FieldSolverT, class GatherT, class PusherT, class DepositT, clas
 class PICEngine final : public EngineBase<PICEngine<FieldSolverT, GatherT, PusherT, DepositT, FieldBoundaryT, ParticleBoundaryT, FieldInjectorT, BLOCK_SIZE>>
 {
 public:
-    // Move Semantics
     PICEngine(PICEngine&&) noexcept            = default;
     PICEngine& operator=(PICEngine&&) noexcept = default;
     PICEngine(const PICEngine&)                = delete;
     PICEngine& operator=(const PICEngine&)     = delete;
 
-    // 1. Grid + PPC Constructor (Constant density n0, default injector)
     explicit PICEngine(const Grid& grid, std::size_t particles_per_cell = 10, float n0 = 1.0f)
             : PICEngine(grid, particles_per_cell, FieldBoundaryT{}, ParticleBoundaryT{}, FieldInjectorT{}, n0)
     {
     }
 
-    // 2. Full Constructor with Boundaries and Field Injector
     PICEngine(const Grid& grid, std::size_t particles_per_cell, FieldBoundaryT field_boundary, ParticleBoundaryT particle_boundary,
               FieldInjectorT field_injector = FieldInjectorT{}, float n0 = 1.0f)
             : fields_(grid), current_(grid), particles_(grid.physical_size() * particles_per_cell), field_solver_{}, pusher_{}, gather_{}, deposit_{},
@@ -52,7 +63,6 @@ public:
         particles_.init_density_constant(n0);
     }
 
-    // 3. Density Profile Constructor
     template <typename DensityFunc>
     PICEngine(const Grid& grid, std::size_t particles_per_cell, DensityFunc&& density_fn, FieldBoundaryT field_boundary = FieldBoundaryT{},
               ParticleBoundaryT particle_boundary = ParticleBoundaryT{}, FieldInjectorT field_injector = FieldInjectorT{})
@@ -66,7 +76,6 @@ public:
         particles_.init_density_profile(grid, std::forward<DensityFunc>(density_fn));
     }
 
-    // 4. Constructor with Pre-constructed ParticleSystem
     PICEngine(const Grid& grid, particle::ParticleSystem<BLOCK_SIZE> particles, FieldBoundaryT field_boundary = FieldBoundaryT{},
               ParticleBoundaryT particle_boundary = ParticleBoundaryT{}, FieldInjectorT field_injector = FieldInjectorT{})
             : fields_(grid), current_(grid), particles_(std::move(particles)), field_solver_{}, pusher_{}, gather_{}, deposit_{}, field_boundary_(std::move(field_boundary)),
@@ -75,118 +84,144 @@ public:
     {
     }
 
+    /**
+     * @brief Advances the particle and field state by a single time step dt.
+     * @param dt Time step duration.
+     */
     void advance_impl(double dt)
     {
         const Grid&  grid         = fields_.E.grid();
         const double current_time = static_cast<double>(step_counter_) * dt;
 
-        // Trigger sort on static interval OR when mean spatial stride exceeds threshold
         const bool stride_degraded = (locality_threshold_ > 0.0) && (locality_metrics_.mean_stride() > locality_threshold_);
         const bool periodic_sort   = (sort_frequency_ > 0) && (step_counter_ % sort_frequency_ == 0);
 
         if (particles_.active_particles() > 0 && (periodic_sort || stride_degraded))
         {
-            auto timer = profiler_.time_stage(pico::perf::Stage::Sorting);
-            sorter_.sort(particles_, grid);
+            execute_stage(pico::perf::Stage::Sorting, [&] { sorter_.sort(particles_, grid); });
         }
 
-        {
-            auto timer = profiler_.time_stage(pico::perf::Stage::Boundaries);
-            field_boundary_.fill_field_guards(fields_, grid);
-        }
+        execute_stage(pico::perf::Stage::Boundaries, [&] { field_boundary_.fill_field_guards(fields_, grid); });
 
         current_.zero_out();
-        locality_metrics_.reset();
+        ensure_thread_buffers(grid);
 
-        // clang-format off
-        #pragma omp parallel
-        // clang-format on
+        if (enable_locality_diagnostics_)
         {
-            FieldSystem<BLOCK_SIZE> thread_current(grid);
+            locality_metrics_.reset();
+        }
+
+        int actual_threads = 0;
+
+#pragma omp parallel
+        {
+#pragma omp master
+            actual_threads = omp_get_num_threads();
+
+            const int tid            = omp_get_thread_num();
+            auto&     thread_current = thread_currents_[tid];
+            auto&     thread_scratch = thread_scratch_[tid];
+
             thread_current.zero_out();
 
-            FieldScratch<BLOCK_SIZE> thread_scratch;
-
-            std::uint64_t local_gather_ns  = 0;
-            std::uint64_t local_push_ns    = 0;
-            std::uint64_t local_deposit_ns = 0;
-
-            // clang-format off
-            #pragma omp for schedule(static)
-            // clang-format on
-            for (auto& block : particles_)
+            if (enable_stage_profiling_)
             {
-                using clock = pico::perf::PipelineProfiler::clock;
+                // Local tick accumulators (zero overhead, stored on stack)
+                std::uint64_t local_gather_ticks  = 0;
+                std::uint64_t local_push_ticks    = 0;
+                std::uint64_t local_deposit_ticks = 0;
 
-                const auto t0 = clock::now();
-                gather_.gather_block(block, fields_, grid, thread_scratch);
+#pragma omp for schedule(static)
+                for (auto& block : particles_)
+                {
+                    const std::uint64_t t0 = pico::perf::read_cpu_ticks();
+                    gather_.gather_block(block, fields_, grid, thread_scratch);
 
-                const auto t1 = clock::now();
-                pusher_.push_block(block, thread_scratch, dt);
-                particle_boundary_.apply(block, grid);
+                    const std::uint64_t t1 = pico::perf::read_cpu_ticks();
+                    pusher_.push_block(block, thread_scratch, dt);
+                    particle_boundary_.apply(block, grid);
 
-                const auto t2 = clock::now();
-                deposit_.deposit_block(block, thread_current, grid, dt, particles_per_cell_);
+                    const std::uint64_t t2 = pico::perf::read_cpu_ticks();
+                    deposit_.deposit_block(block, thread_current, grid, dt, particles_per_cell_);
 
-                const auto t3 = clock::now();
+                    const std::uint64_t t3 = pico::perf::read_cpu_ticks();
 
-                // Lock-free diagnostic collection (1 atomic update per block, relaxed ordering)
-                pico::diagnostics::LocalityProfiler<particle::ParticleBlock<BLOCK_SIZE>>::process_block(block, grid, locality_metrics_);
+                    local_gather_ticks += (t1 - t0);
+                    local_push_ticks += (t2 - t1);
+                    local_deposit_ticks += (t3 - t2);
 
-                local_gather_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
-                local_push_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
-                local_deposit_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t3 - t2).count();
+                    if (enable_locality_diagnostics_)
+                    {
+                        pico::diagnostics::LocalityProfiler<particle::ParticleBlock<BLOCK_SIZE>>::process_block(block, grid, locality_metrics_);
+                    }
+                }
+
+                profiler_.add_ticks(pico::perf::Stage::Gather, local_gather_ticks);
+                profiler_.add_ticks(pico::perf::Stage::Pusher, local_push_ticks);
+                profiler_.add_ticks(pico::perf::Stage::Deposit, local_deposit_ticks);
             }
-
-            profiler_.add_nanoseconds(pico::perf::Stage::Gather, local_gather_ns);
-            profiler_.add_nanoseconds(pico::perf::Stage::Pusher, local_push_ns);
-            profiler_.add_nanoseconds(pico::perf::Stage::Deposit, local_deposit_ns);
-
-            // clang-format off
-            #pragma omp critical
-            // clang-format on
+            else
             {
-                current_.accumulate(thread_current);
+#pragma omp for schedule(static)
+                for (auto& block : particles_)
+                {
+                    gather_.gather_block(block, fields_, grid, thread_scratch);
+                    pusher_.push_block(block, thread_scratch, dt);
+                    particle_boundary_.apply(block, grid);
+                    deposit_.deposit_block(block, thread_current, grid, dt, particles_per_cell_);
+
+                    if (enable_locality_diagnostics_)
+                    {
+                        pico::diagnostics::LocalityProfiler<particle::ParticleBlock<BLOCK_SIZE>>::process_block(block, grid, locality_metrics_);
+                    }
+                }
             }
         }
 
+        // Parallel current reduction across active OpenMP threads
+#pragma omp parallel for schedule(static) if (actual_threads > 1)
+        for (int i = 0; i < actual_threads; ++i)
         {
-            auto timer = profiler_.time_stage(pico::perf::Stage::Boundaries);
-            field_boundary_.fold_currents(current_, grid);
+            current_.accumulate(thread_currents_[i]);
         }
 
-        {
-            auto timer = profiler_.time_stage(pico::perf::Stage::FieldSolver);
-            field_solver_.solve(fields_, current_, dt);
-            field_injector_.inject(fields_, current_time, dt);
-        }
+        execute_stage(pico::perf::Stage::Boundaries, [&] { field_boundary_.fold_currents(current_, grid); });
+
+        execute_stage(pico::perf::Stage::FieldSolver,
+                      [&]
+                      {
+                          field_solver_.solve(fields_, current_, dt);
+                          field_injector_.inject(fields_, current_time, dt);
+                      });
 
         ++step_counter_;
     }
 
-    // Diagnostics & Locality Configuration
+    void enable_stage_profiling(bool enable) noexcept
+    {
+        enable_stage_profiling_ = enable;
+    }
+    void enable_locality_diagnostics(bool enable) noexcept
+    {
+        enable_locality_diagnostics_ = enable;
+    }
     [[nodiscard]] double mean_cell_stride() const noexcept
     {
         return locality_metrics_.mean_stride();
     }
-
     [[nodiscard]] const pico::diagnostics::LocalityMetrics& locality_metrics() const noexcept
     {
         return locality_metrics_;
     }
-
     void set_sort_frequency(std::size_t frequency) noexcept
     {
         sort_frequency_ = frequency;
     }
-
     void set_locality_threshold(double max_stride) noexcept
     {
         locality_threshold_ = max_stride;
     }
-
-    // Diagnostics & Profiling Interface
-    const pico::perf::PipelineProfiler& profiler() const noexcept
+    [[nodiscard]] const pico::perf::PipelineProfiler& profiler() const noexcept
     {
         return profiler_;
     }
@@ -197,7 +232,6 @@ public:
         step_counter_ = 0;
     }
 
-    // State Accessors
     particle::ParticleSystem<BLOCK_SIZE>& particles() noexcept
     {
         return particles_;
@@ -206,7 +240,6 @@ public:
     {
         return particles_;
     }
-
     EMFields<BLOCK_SIZE>& fields() noexcept
     {
         return fields_;
@@ -215,7 +248,6 @@ public:
     {
         return fields_;
     }
-
     FieldSystem<BLOCK_SIZE>& current() noexcept
     {
         return current_;
@@ -224,13 +256,43 @@ public:
     {
         return current_;
     }
-
-    std::size_t particles_per_cell() const noexcept
+    [[nodiscard]] std::size_t particles_per_cell() const noexcept
     {
         return particles_per_cell_;
     }
 
 private:
+    template <typename StageFunc>
+    void execute_stage(pico::perf::Stage stage, StageFunc&& func)
+    {
+        if (enable_stage_profiling_)
+        {
+            auto timer = profiler_.time_stage(stage);
+            std::forward<StageFunc>(func)();
+        }
+        else
+        {
+            std::forward<StageFunc>(func)();
+        }
+    }
+
+    void ensure_thread_buffers(const Grid& grid)
+    {
+        const std::size_t nthreads = static_cast<std::size_t>(omp_get_max_threads());
+
+        if (thread_currents_.size() < nthreads)
+        {
+            thread_currents_.reserve(nthreads);
+            thread_scratch_.reserve(nthreads);
+
+            for (std::size_t i = thread_currents_.size(); i < nthreads; ++i)
+            {
+                thread_currents_.emplace_back(grid);
+                thread_scratch_.emplace_back();
+            }
+        }
+    }
+
     EMFields<BLOCK_SIZE>                 fields_;
     FieldSystem<BLOCK_SIZE>              current_;
     particle::ParticleSystem<BLOCK_SIZE> particles_;
@@ -244,12 +306,18 @@ private:
     FieldInjectorT                                    field_injector_;
     pico::modules::sorter::ParticleSorter<BLOCK_SIZE> sorter_;
 
+    alignas(64) std::vector<FieldSystem<BLOCK_SIZE>> thread_currents_;
+    alignas(64) std::vector<FieldScratch<BLOCK_SIZE>> thread_scratch_;
+
     std::size_t particles_per_cell_{10};
 
     pico::perf::PipelineProfiler profiler_{};
     std::size_t                  step_counter_{0};
-    std::size_t                  sort_frequency_{50};
+    std::size_t                  sort_frequency_{0};
 
     pico::diagnostics::LocalityMetrics locality_metrics_{};
-    double                             locality_threshold_{0.0}; // 0.0 disables stride-triggered sorting
+    double                             locality_threshold_{0.0};
+
+    bool enable_locality_diagnostics_{false};
+    bool enable_stage_profiling_{false};
 };
