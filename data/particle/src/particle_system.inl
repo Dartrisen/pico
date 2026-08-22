@@ -227,15 +227,15 @@ void ParticleSystem<BLOCK_SIZE>::init_velocities_profile(VelFunc&& vel_fn)
     }
 }
 
-// Thermal distribution with custom drift lambda (Box-Muller for portable RNG)
+// Anisotropic Thermal Distribution (handles custom drift lambda)
 template <size_t BLOCK_SIZE>
 template <typename DriftFunc>
-void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th, DriftFunc&& drift_func, uint32_t seed)
+void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th_x, float v_th_y, float v_th_z, DriftFunc&& drift_func, uint32_t seed)
 {
     std::mt19937                          gen(seed);
     std::uniform_real_distribution<float> u_dist(1e-7f, 1.0f - 1e-7f);
 
-    auto sample_normal = [&]() -> float
+    auto sample_normal = [&](float v_th) -> float
     {
         const float u1 = u_dist(gen);
         const float u2 = u_dist(gen);
@@ -246,15 +246,30 @@ void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th, DriftFunc&&
             [&](double x)
             {
                 const auto [vx_drift, vy_drift, vz_drift] = drift_func(x);
-                return std::tuple{vx_drift + sample_normal(), vy_drift + sample_normal(), vz_drift + sample_normal()};
+                return std::tuple{vx_drift + sample_normal(v_th_x), vy_drift + sample_normal(v_th_y), vz_drift + sample_normal(v_th_z)};
             });
 }
 
-// Constant thermal drift overload delegating directly to the spatial drift variant
+// Isotropic Thermal Distribution with custom drift lambda (Delegates to anisotropic)
+template <size_t BLOCK_SIZE>
+template <typename DriftFunc>
+void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th, DriftFunc&& drift_func, uint32_t seed)
+{
+    init_velocities_thermal(v_th, v_th, v_th, std::forward<DriftFunc>(drift_func), seed);
+}
+
+// Constant Anisotropic Thermal Drift Overload
+template <size_t BLOCK_SIZE>
+void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th_x, float v_th_y, float v_th_z, float v_drift_x, float v_drift_y, float v_drift_z, uint32_t seed)
+{
+    init_velocities_thermal(v_th_x, v_th_y, v_th_z, [=](double) { return std::tuple{v_drift_x, v_drift_y, v_drift_z}; }, seed);
+}
+
+// Constant Isotropic Thermal Drift Overload
 template <size_t BLOCK_SIZE>
 void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th, float v_drift_x, float v_drift_y, float v_drift_z, uint32_t seed)
 {
-    init_velocities_thermal(v_th, [=](double) { return std::tuple{v_drift_x, v_drift_y, v_drift_z}; }, seed);
+    init_velocities_thermal(v_th, v_th, v_th, v_drift_x, v_drift_y, v_drift_z, seed);
 }
 
 template <size_t BLOCK_SIZE>

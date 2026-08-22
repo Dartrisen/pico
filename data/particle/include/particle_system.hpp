@@ -79,6 +79,11 @@ public:
     void init_velocities_thermal(float v_th, float v_drift_x = 0.0f, float v_drift_y = 0.0f, float v_drift_z = 0.0f, uint32_t seed = 42);
 
     template <typename DriftFunc>
+    void init_velocities_thermal(float v_th_x, float v_th_y, float v_th_z, DriftFunc&& drift_func, uint32_t seed = 42);
+
+    void init_velocities_thermal(float v_th_x, float v_th_y, float v_th_z, float v_drift_x, float v_drift_y, float v_drift_z, uint32_t seed = 42);
+
+    template <typename DriftFunc>
     void init_velocities_thermal(float v_th, DriftFunc&& drift_func, uint32_t seed = 42);
 
     void init_velocities_wave(float v0, double k, bool longitudinal_only = true);
