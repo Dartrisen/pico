@@ -3,7 +3,9 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 cc_library(
     name = "diagnostics",
     hdrs = [
-        "EnergyDiagnostic.hpp"
+        "EnergyDiagnostic.hpp",
+        "FieldEnvelopeDiagnostic.hpp",
+        "CurrentDiagnostic.hpp",
     ],
     visibility = ["//visibility:public"],
 )
