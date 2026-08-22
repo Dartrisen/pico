@@ -41,6 +41,7 @@ build:fast --copt=-mtune=native
 
 build:linux --copt=-fopenmp
 build:linux --linkopt=-fopenmp
+build:linux --features=-thin_lto
 
 
 # ============================================================
