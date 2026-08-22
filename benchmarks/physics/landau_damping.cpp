@@ -62,27 +62,7 @@ int main()
 
     auto& particles = engine_instance.particles();
     particles.init_positions_uniform(grid);
-
-    // Portable Box-Muller normal generator to eliminate OS-dependent std::normal_distribution variance
-    std::mt19937                          rng(42);
-    std::uniform_real_distribution<float> u_dist(1e-7f, 1.0f - 1e-7f);
-
-    auto sample_normal = [&](float mean, float stddev) -> float
-    {
-        const float u1 = u_dist(rng);
-        const float u2 = u_dist(rng);
-        const float z0 = std::sqrt(-2.0f * std::log(u1)) * std::cos(2.0f * std::numbers::pi_v<float> * u2);
-        return mean + z0 * stddev;
-    };
-
-    const float float_vth = static_cast<float>(v_th);
-
-    particles.init_velocities_profile(
-            [&](double x) -> std::tuple<float, float, float>
-            {
-                const float v_wave = v1 * std::sin(static_cast<float>(k * x));
-                return {sample_normal(0.0f, float_vth) + v_wave, sample_normal(0.0f, float_vth), sample_normal(0.0f, float_vth)};
-            });
+    particles.init_velocities_thermal(v_th, [&](double x) { return std::tuple{v1 * std::sin(static_cast<float>(k * x)), 0.0f, 0.0f}; }, 42);
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();

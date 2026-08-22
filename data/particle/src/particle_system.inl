@@ -1,16 +1,18 @@
-#include "data/particle/include/particle_system.hpp"
+#pragma once
 
 #include <algorithm>
-#include <cstring>
-#include <iostream>
+#include <cmath>
 #include <new>
 #include <random>
 #include <span>
-#include <stdexcept>
 #include <tuple>
 
 namespace particle
 {
+
+// ============================================================================
+// Constructors & Destructor
+// ============================================================================
 
 template <size_t BLOCK_SIZE>
 ParticleSystem<BLOCK_SIZE>::ParticleSystem(size_t maxParticles) : maxParticles_(maxParticles), numBlocks_((maxParticles + BLOCK_SIZE - 1) / BLOCK_SIZE)
@@ -89,100 +91,38 @@ ParticleSystem<BLOCK_SIZE>::~ParticleSystem()
     }
 }
 
+// ============================================================================
+// Accessors & System Information
+// ============================================================================
+
 template <size_t BLOCK_SIZE>
-void ParticleSystem<BLOCK_SIZE>::set_active(size_t n)
+size_t ParticleSystem<BLOCK_SIZE>::active_particles() const
 {
-    activeParticles_ = std::min(n, maxParticles_);
-    size_t remaining = activeParticles_;
-    for (size_t b = 0; b < numBlocks_; ++b)
-    {
-        uint32_t cnt           = static_cast<uint32_t>(std::min(remaining, (size_t) BLOCK_SIZE));
-        blocks_[b].activeCount = static_cast<uint16_t>(cnt);
-        remaining              = (remaining > BLOCK_SIZE) ? (remaining - BLOCK_SIZE) : 0;
-    }
-}
-
-// ---- Position Initializers ----
-template <size_t BLOCK_SIZE>
-void ParticleSystem<BLOCK_SIZE>::init_positions_uniform(double domain_length)
-{
-    if (activeParticles_ == 0)
-        return;
-
-    double dx         = domain_length / static_cast<double>(activeParticles_);
-    size_t global_idx = 0;
-
-    for (size_t b = 0; b < numBlocks_; ++b)
-    {
-        auto& block = blocks_[b];
-        for (size_t i = 0; i < block.activeCount; ++i, ++global_idx)
-        {
-            block.position_x[i] = static_cast<float>((global_idx + 0.5) * dx);
-        }
-    }
+    return activeParticles_;
 }
 
 template <size_t BLOCK_SIZE>
-void ParticleSystem<BLOCK_SIZE>::init_positions_uniform(const Grid& grid)
+constexpr size_t ParticleSystem<BLOCK_SIZE>::block_size()
 {
-    init_positions_uniform(grid.physical_size() * grid.cell_size());
-}
-
-// ---- Velocity Initializers ----
-template <size_t BLOCK_SIZE>
-void ParticleSystem<BLOCK_SIZE>::init_velocities_cold(float vx, float vy, float vz)
-{
-    for (size_t b = 0; b < numBlocks_; ++b)
-    {
-        auto& block = blocks_[b];
-        std::fill(block.momentum_x.begin(), block.momentum_x.end(), vx);
-        std::fill(block.momentum_y.begin(), block.momentum_y.end(), vy);
-        std::fill(block.momentum_z.begin(), block.momentum_z.end(), vz);
-    }
+    return BLOCK_SIZE;
 }
 
 template <size_t BLOCK_SIZE>
-template <typename VelFunc>
-void ParticleSystem<BLOCK_SIZE>::init_velocities_profile(VelFunc&& vel_fn)
+size_t ParticleSystem<BLOCK_SIZE>::max_particles() const
 {
-    for (size_t b = 0; b < numBlocks_; ++b)
-    {
-        auto& block = blocks_[b];
-        for (size_t i = 0; i < block.activeCount; ++i)
-        {
-            const float x0 = block.position_x[i];
-            const float m  = block.mass[i];
-
-            auto [vx, vy, vz]   = vel_fn(static_cast<double>(x0));
-            block.momentum_x[i] = m * vx;
-            block.momentum_y[i] = m * vy;
-            block.momentum_z[i] = m * vz;
-        }
-    }
+    return maxParticles_;
 }
 
 template <size_t BLOCK_SIZE>
-void ParticleSystem<BLOCK_SIZE>::init_velocities_wave(float v0, double k, bool longitudinal_only)
+size_t ParticleSystem<BLOCK_SIZE>::num_blocks() const
 {
-    init_velocities_profile(
-            [v0, k, longitudinal_only](double x)
-            {
-                const float v_wave = v0 * std::sin(static_cast<float>(k * x));
-                const float v_y    = longitudinal_only ? 0.0f : static_cast<float>(v0 * std::cos(k * x));
-                return std::tuple{v_wave, v_y, 0.0f};
-            });
+    return numBlocks_;
 }
 
-template <size_t BLOCK_SIZE>
-void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th, float v_drift_x, float v_drift_y, float v_drift_z, uint32_t seed)
-{
-    std::mt19937                    gen(seed);
-    std::normal_distribution<float> dist(0.0f, v_th);
+// ============================================================================
+// Density Initializers
+// ============================================================================
 
-    init_velocities_profile([&](double) { return std::tuple{v_drift_x + dist(gen), v_drift_y + dist(gen), v_drift_z + dist(gen)}; });
-}
-
-// ---- Density Initializers ----
 template <size_t BLOCK_SIZE>
 void ParticleSystem<BLOCK_SIZE>::init_density_constant(float n0, float base_charge, float base_mass)
 {
@@ -222,28 +162,137 @@ void ParticleSystem<BLOCK_SIZE>::init_density_profile(const Grid& grid, DensityF
     }
 }
 
+// ============================================================================
+// Position Initializers
+// ============================================================================
+
 template <size_t BLOCK_SIZE>
-constexpr size_t ParticleSystem<BLOCK_SIZE>::block_size()
+void ParticleSystem<BLOCK_SIZE>::init_positions_uniform(double domain_length)
 {
-    return BLOCK_SIZE;
+    if (activeParticles_ == 0)
+        return;
+
+    const double dx         = domain_length / static_cast<double>(activeParticles_);
+    size_t       global_idx = 0;
+
+    for (size_t b = 0; b < numBlocks_; ++b)
+    {
+        auto& block = blocks_[b];
+        for (size_t i = 0; i < block.activeCount; ++i, ++global_idx)
+        {
+            block.position_x[i] = static_cast<float>((global_idx + 0.5) * dx);
+        }
+    }
 }
 
 template <size_t BLOCK_SIZE>
-size_t ParticleSystem<BLOCK_SIZE>::num_blocks() const
+void ParticleSystem<BLOCK_SIZE>::init_positions_uniform(const Grid& grid)
 {
-    return numBlocks_;
+    init_positions_uniform(grid.physical_size() * grid.cell_size());
+}
+
+// ============================================================================
+// Velocity Initializers
+// ============================================================================
+
+template <size_t BLOCK_SIZE>
+void ParticleSystem<BLOCK_SIZE>::init_velocities_cold(float vx, float vy, float vz)
+{
+    for (size_t b = 0; b < numBlocks_; ++b)
+    {
+        auto& block = blocks_[b];
+        std::fill(block.momentum_x.begin(), block.momentum_x.end(), vx);
+        std::fill(block.momentum_y.begin(), block.momentum_y.end(), vy);
+        std::fill(block.momentum_z.begin(), block.momentum_z.end(), vz);
+    }
 }
 
 template <size_t BLOCK_SIZE>
-size_t ParticleSystem<BLOCK_SIZE>::max_particles() const
+template <typename VelFunc>
+void ParticleSystem<BLOCK_SIZE>::init_velocities_profile(VelFunc&& vel_fn)
 {
-    return maxParticles_;
+    for (size_t b = 0; b < numBlocks_; ++b)
+    {
+        auto& block = blocks_[b];
+        for (size_t i = 0; i < block.activeCount; ++i)
+        {
+            const float x0 = block.position_x[i];
+            const float m  = block.mass[i];
+
+            auto [vx, vy, vz]   = vel_fn(static_cast<double>(x0));
+            block.momentum_x[i] = m * vx;
+            block.momentum_y[i] = m * vy;
+            block.momentum_z[i] = m * vz;
+        }
+    }
+}
+
+// Thermal distribution with custom drift lambda (Box-Muller for portable RNG)
+template <size_t BLOCK_SIZE>
+template <typename DriftFunc>
+void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th, DriftFunc&& drift_func, uint32_t seed)
+{
+    std::mt19937                          gen(seed);
+    std::uniform_real_distribution<float> u_dist(1e-7f, 1.0f - 1e-7f);
+
+    auto sample_normal = [&]() -> float
+    {
+        const float u1 = u_dist(gen);
+        const float u2 = u_dist(gen);
+        return v_th * std::sqrt(-2.0f * std::log(u1)) * std::cos(2.0f * std::numbers::pi_v<float> * u2);
+    };
+
+    init_velocities_profile(
+            [&](double x)
+            {
+                const auto [vx_drift, vy_drift, vz_drift] = drift_func(x);
+                return std::tuple{vx_drift + sample_normal(), vy_drift + sample_normal(), vz_drift + sample_normal()};
+            });
+}
+
+// Constant thermal drift overload delegating directly to the spatial drift variant
+template <size_t BLOCK_SIZE>
+void ParticleSystem<BLOCK_SIZE>::init_velocities_thermal(float v_th, float v_drift_x, float v_drift_y, float v_drift_z, uint32_t seed)
+{
+    init_velocities_thermal(v_th, [=](double) { return std::tuple{v_drift_x, v_drift_y, v_drift_z}; }, seed);
 }
 
 template <size_t BLOCK_SIZE>
-size_t ParticleSystem<BLOCK_SIZE>::active_particles() const
+void ParticleSystem<BLOCK_SIZE>::init_velocities_wave(float v0, double k, bool longitudinal_only)
 {
-    return activeParticles_;
+    init_velocities_profile(
+            [v0, k, longitudinal_only](double x)
+            {
+                const float v_wave = v0 * std::sin(static_cast<float>(k * x));
+                const float v_y    = longitudinal_only ? 0.0f : static_cast<float>(v0 * std::cos(k * x));
+                return std::tuple{v_wave, v_y, 0.0f};
+            });
+}
+
+// ============================================================================
+// Mutators & State Adjustments
+// ============================================================================
+
+template <size_t BLOCK_SIZE>
+void ParticleSystem<BLOCK_SIZE>::set_active(size_t n)
+{
+    activeParticles_ = std::min(n, maxParticles_);
+    size_t remaining = activeParticles_;
+    for (size_t b = 0; b < numBlocks_; ++b)
+    {
+        uint32_t cnt           = static_cast<uint32_t>(std::min(remaining, static_cast<size_t>(BLOCK_SIZE)));
+        blocks_[b].activeCount = static_cast<uint16_t>(cnt);
+        remaining              = (remaining > BLOCK_SIZE) ? (remaining - BLOCK_SIZE) : 0;
+    }
+}
+
+template <size_t BLOCK_SIZE>
+void ParticleSystem<BLOCK_SIZE>::set_block_value(particle::ParticleBlock<BLOCK_SIZE>& block, ParticleValue value)
+{
+    const float val = static_cast<float>(value);
+    std::fill(block.mass.begin(), block.mass.end(), val);
+    std::fill(block.charge.begin(), block.charge.end(), val);
+    std::fill(block.weight.begin(), block.weight.end(), val);
 }
 
 } // namespace particle
