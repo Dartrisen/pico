@@ -10,6 +10,7 @@
 #include "engine/modules/concepts.hpp"
 #include "engine/modules/injector/Injectors.hpp"
 #include "engine/modules/sorter/ParticleSorter.hpp"
+#include "engine/perf/LocalityProfiler.hpp"
 #include "engine/perf/PipelineProfiler.hpp"
 
 #include <cstdint>
@@ -79,7 +80,11 @@ public:
         const Grid&  grid         = fields_.E.grid();
         const double current_time = static_cast<double>(step_counter_) * dt;
 
-        if (particles_.active_particles() > 0 && (step_counter_ % sort_frequency_ == 0))
+        // Trigger sort on static interval OR when mean spatial stride exceeds threshold
+        const bool stride_degraded = (locality_threshold_ > 0.0) && (locality_metrics_.mean_stride() > locality_threshold_);
+        const bool periodic_sort   = (sort_frequency_ > 0) && (step_counter_ % sort_frequency_ == 0);
+
+        if (particles_.active_particles() > 0 && (periodic_sort || stride_degraded))
         {
             auto timer = profiler_.time_stage(pico::perf::Stage::Sorting);
             for (auto& block : particles_)
@@ -94,6 +99,8 @@ public:
         }
 
         current_.zero_out();
+        locality_metrics_.reset();
+
         // clang-format off
         #pragma omp parallel
         // clang-format on
@@ -106,6 +113,7 @@ public:
             std::uint64_t local_gather_ns  = 0;
             std::uint64_t local_push_ns    = 0;
             std::uint64_t local_deposit_ns = 0;
+
             // clang-format off
             #pragma omp for schedule(static)
             // clang-format on
@@ -125,6 +133,9 @@ public:
 
                 const auto t3 = clock::now();
 
+                // Lock-free diagnostic collection (1 atomic update per block, relaxed ordering)
+                pico::diagnostics::LocalityProfiler<particle::ParticleBlock<BLOCK_SIZE>>::process_block(block, grid, locality_metrics_);
+
                 local_gather_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
                 local_push_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
                 local_deposit_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t3 - t2).count();
@@ -133,6 +144,7 @@ public:
             profiler_.add_nanoseconds(pico::perf::Stage::Gather, local_gather_ns);
             profiler_.add_nanoseconds(pico::perf::Stage::Pusher, local_push_ns);
             profiler_.add_nanoseconds(pico::perf::Stage::Deposit, local_deposit_ns);
+
             // clang-format off
             #pragma omp critical
             // clang-format on
@@ -155,6 +167,27 @@ public:
         ++step_counter_;
     }
 
+    // Diagnostics & Locality Configuration
+    [[nodiscard]] double mean_cell_stride() const noexcept
+    {
+        return locality_metrics_.mean_stride();
+    }
+
+    [[nodiscard]] const pico::diagnostics::LocalityMetrics& locality_metrics() const noexcept
+    {
+        return locality_metrics_;
+    }
+
+    void set_sort_frequency(std::size_t frequency) noexcept
+    {
+        sort_frequency_ = frequency;
+    }
+
+    void set_locality_threshold(double max_stride) noexcept
+    {
+        locality_threshold_ = max_stride;
+    }
+
     // Diagnostics & Profiling Interface
     const pico::perf::PipelineProfiler& profiler() const noexcept
     {
@@ -165,23 +198,6 @@ public:
     {
         profiler_.reset();
         step_counter_ = 0;
-    }
-
-    void print_perf_report() const
-    {
-        const double total_t = profiler_.total_seconds();
-
-        std::cout << "\n--- Engine Profiler Summary (" << step_counter_ << " steps) ---\n";
-        for (std::size_t i = 0; i < static_cast<std::size_t>(pico::perf::Stage::Count); ++i)
-        {
-            const auto   stage = static_cast<pico::perf::Stage>(i);
-            const double t     = profiler_.seconds(stage);
-            const double pct   = (total_t > 0.0) ? (t / total_t) * 100.0 : 0.0;
-
-            std::cout << std::left << std::setw(36) << pico::perf::STAGE_NAMES[i] << ": " << std::right << std::setw(12) << pico::perf::PipelineProfiler::format_time(t) << " ("
-                      << std::fixed << std::setprecision(1) << std::setw(5) << pct << "%)\n";
-        }
-        std::cout << "---------------------------------------------\n";
     }
 
     // State Accessors
@@ -236,4 +252,7 @@ private:
     pico::perf::PipelineProfiler profiler_{};
     std::size_t                  step_counter_{0};
     std::size_t                  sort_frequency_{50};
+
+    pico::diagnostics::LocalityMetrics locality_metrics_{};
+    double                             locality_threshold_{1.0}; // 0.0 disables stride-triggered sorting
 };

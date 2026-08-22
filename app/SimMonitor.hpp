@@ -40,6 +40,7 @@ public:
         const double avg_step_ms = (step > 0 && interval_sec > 0.0) ? (interval_sec / log_interval_) * 1000.0 : 0.0;
         const double mpsp        = (interval_sec > 0.0) ? ((engine.total_particles() * log_interval_) / interval_sec) / 1e6 : 0.0;
         const double eta_sec     = (progress > 0.0 && progress < 1.0) ? (total_sec / progress) * (1.0 - progress) : 0.0;
+        const double stride      = engine.mean_cell_stride();
 
         constexpr int bar_width = 10;
         const int     filled    = static_cast<int>(std::round(bar_width * progress));
@@ -48,15 +49,17 @@ public:
             bar += (i < filled ? "█" : "░");
         bar += "]";
 
-        std::ostringstream lat_ss, mpsp_ss, pct_ss;
+        std::ostringstream lat_ss, mpsp_ss, stride_ss, pct_ss;
         lat_ss << std::fixed << std::setprecision(2) << avg_step_ms << " ms";
         mpsp_ss << std::fixed << std::setprecision(1) << mpsp << " MPSP";
+        stride_ss << std::fixed << std::setprecision(2) << stride << " ΔC";
         pct_ss << std::right << std::setw(3) << static_cast<int>(progress * 100.0) << "%";
 
         using namespace pico::ui;
         std::cout << CYAN << std::left << std::setw(8) << step << RESET << std::left << std::setw(12) << std::fixed << std::setprecision(4) << (step * dt_) << YELLOW << std::left
-                  << std::setw(14) << lat_ss.str() << RESET << GREEN << std::left << std::setw(16) << mpsp_ss.str() << RESET << MAGENTA << bar << " " << pct_ss.str() << "   "
-                  << RESET << GRAY << std::left << std::setw(10) << format_duration(eta_sec) << RESET << "\n";
+                  << std::setw(14) << lat_ss.str() << RESET << GREEN << std::left << std::setw(16) << mpsp_ss.str() << RESET << BLUE << std::left << std::setw(12)
+                  << stride_ss.str() << RESET << MAGENTA << bar << " " << pct_ss.str() << "   " << RESET << GRAY << std::left << std::setw(10) << format_duration(eta_sec) << RESET
+                  << "\n";
     }
 
     void print_final_report(const IEngine& engine) const
@@ -65,7 +68,7 @@ public:
         const double   total_wall_sec   = std::chrono::duration<double>(clock::now() - start_time_).count();
         const uint64_t total_part_steps = static_cast<uint64_t>(engine.total_particles()) * nsteps_;
 
-        std::cout << GRAY << "----------------------------------------------------------------------------------------\n" << RESET;
+        std::cout << GRAY << "-----------------------------------------------------------------------------------------------------\n" << RESET;
         std::cout << GREEN << BOLD << " ✔ Simulation finished in " << std::fixed << std::setprecision(2) << total_wall_sec << " seconds.\n\n" << RESET;
 
         const auto&  profiler      = engine.profiler();
@@ -99,11 +102,13 @@ public:
         {
             const double avg_mpsp        = (total_part_steps / total_wall_sec) / 1e6;
             const double overall_ns_part = (total_wall_sec * 1e9) / total_part_steps;
+            const double final_stride    = engine.mean_cell_stride();
 
             std::cout << BOLD << WHITE << " Particle Performance Summary:\n" << RESET;
             std::cout << "   • Total Particle Updates : " << total_part_steps << "\n";
             std::cout << "   • Average Throughput     : " << GREEN << std::fixed << std::setprecision(2) << avg_mpsp << " MPSP" << RESET << "\n";
-            std::cout << "   • Total Cost / Particle  : " << MAGENTA << std::fixed << std::setprecision(2) << overall_ns_part << " ns/particle-step" << RESET << "\n\n";
+            std::cout << "   • Total Cost / Particle  : " << MAGENTA << std::fixed << std::setprecision(2) << overall_ns_part << " ns/particle-step" << RESET << "\n";
+            std::cout << "   • Spatial Stride (ΔC)    : " << BLUE << std::fixed << std::setprecision(3) << final_stride << " cells/pair" << RESET << "\n\n";
         }
     }
 
@@ -151,8 +156,8 @@ private:
     {
         using namespace pico::ui;
         std::cout << BOLD << WHITE << std::left << std::setw(8) << "Step" << std::setw(12) << "Sim Time" << std::setw(14) << "Step Lat" << std::setw(16) << "Throughput"
-                  << std::setw(20) << "Progress" << std::setw(10) << "ETA" << RESET << "\n";
-        std::cout << GRAY << "----------------------------------------------------------------------------------------\n" << RESET;
+                  << std::setw(12) << "Locality" << std::setw(20) << "Progress" << std::setw(10) << "ETA" << RESET << "\n";
+        std::cout << GRAY << "-----------------------------------------------------------------------------------------------------\n" << RESET;
     }
 
     double            dt_{0.0};

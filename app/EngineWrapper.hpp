@@ -25,6 +25,11 @@ public:
         return engine_.fields().E.grid().physical_size();
     }
 
+    double mean_cell_stride() const noexcept override
+    {
+        return engine_.mean_cell_stride();
+    }
+
     const pico::perf::PipelineProfiler& profiler() const override
     {
         return engine_.profiler();
