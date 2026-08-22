@@ -74,6 +74,8 @@ int main()
             {
                 auto& eng = concrete_wrapper->engine();
 
+                // Freeze the electric field for the current/flux conservation test.
+                // This isolates the particle current evolution from E-field acceleration
                 eng.fields().E.zero_out();
 
                 // Standardized energy and current diagnostic reductions
@@ -88,7 +90,7 @@ int main()
     const auto energy_res  = energy_verifier.verify();
     const auto current_res = current_verifier.verify();
 
-    pico::ui::VerificationReport report("Current & Flux Conservation Verification", energy_res.passed && current_res.passed);
+    pico::ui::VerificationReport report("Current Conservation Verification", energy_res.passed && current_res.passed);
 
     report.add_sci_row("Initial Energy", energy_res.initial_energy);
     report.add_sci_row("Final Energy", energy_res.final_energy);
