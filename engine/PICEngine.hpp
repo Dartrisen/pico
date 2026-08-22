@@ -87,10 +87,7 @@ public:
         if (particles_.active_particles() > 0 && (periodic_sort || stride_degraded))
         {
             auto timer = profiler_.time_stage(pico::perf::Stage::Sorting);
-            for (auto& block : particles_)
-            {
-                sorter_.sort_block(block, grid);
-            }
+            sorter_.sort(particles_, grid);
         }
 
         {
@@ -254,5 +251,5 @@ private:
     std::size_t                  sort_frequency_{50};
 
     pico::diagnostics::LocalityMetrics locality_metrics_{};
-    double                             locality_threshold_{1.0}; // 0.0 disables stride-triggered sorting
+    double                             locality_threshold_{0.0}; // 0.0 disables stride-triggered sorting
 };
