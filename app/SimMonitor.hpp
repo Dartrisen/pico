@@ -169,12 +169,21 @@ private:
                   << RESET << GRAY << "  High-Performance Particle-in-Cell Engine\n\n"
                   << RESET;
 
-        std::cout << GRAY << "┌── Simulation Setup ───────────────────────────────────────────────────────────────────┐\n" << RESET;
-        std::cout << "│ " << BOLD << "Grid Cells:" << RESET << " " << std::setw(8) << engine.grid_cells() << " │ " << BOLD << "Time Step (dt):" << RESET << " " << std::setw(8)
-                  << dt_ << " │ " << BOLD << "Target Time:" << RESET << " " << std::setw(8) << (nsteps_ * dt_) << " │\n";
-        std::cout << "│ " << BOLD << "Active Parts:" << RESET << " " << std::setw(8) << engine.total_particles() << " │ " << BOLD << "Total Steps:" << RESET << " " << std::setw(8)
-                  << nsteps_ << " │ " << BOLD << "Log Every:" << RESET << " " << std::setw(8) << log_interval_ << " │\n";
-        std::cout << GRAY << "└───────────────────────────────────────────────────────────────────────────────────────┘\n\n" << RESET;
+        // Top border (84 characters wide)
+        std::cout << GRAY << "┌── Simulation Setup ─────────────────────────────────────────────────────────┐\n" << RESET;
+
+        // Row 1
+        std::cout << "│ " << BOLD << std::left << std::setw(14) << "Grid Cells:" << RESET << std::right << std::setw(10) << engine.grid_cells() << " │ " << BOLD << std::left
+                  << std::setw(16) << "Time Step (dt):" << RESET << std::right << std::setw(10) << dt_ << " │ " << BOLD << std::left << std::setw(14) << "Target Time:" << RESET
+                  << std::right << std::setw(5) << (nsteps_ * dt_) << " │\n";
+
+        // Row 2
+        std::cout << "│ " << BOLD << std::left << std::setw(14) << "Active Parts:" << RESET << std::right << std::setw(10) << engine.total_particles() << " │ " << BOLD << std::left
+                  << std::setw(16) << "Total Steps:" << RESET << std::right << std::setw(10) << nsteps_ << " │ " << BOLD << std::left << std::setw(14) << "Log Every:" << RESET
+                  << std::right << std::setw(5) << log_interval_ << " │\n";
+
+        // Bottom border (84 characters wide)
+        std::cout << GRAY << "└─────────────────────────────────────────────────────────────────────────────┘\n\n" << RESET;
     }
 
     void print_header() const
