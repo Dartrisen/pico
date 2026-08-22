@@ -35,6 +35,9 @@ public:
     void init_positions_uniform(const Grid& grid);
     void init_velocities_cold(float vx = 0.0f, float vy = 0.0f, float vz = 0.0f);
     void init_velocities_thermal(float v_th, float v_drift_x = 0.0f, float v_drift_y = 0.0f, float v_drift_z = 0.0f, uint32_t seed = 42);
+    void init_velocities_wave(float v0, double k, bool longitudinal_only = true);
+    template <typename VelFunc>
+    void init_velocities_profile(VelFunc&& vel_fn);
 
     // ---- Density & Weight Initializers ----
     void init_density_constant(float n0 = 1.0f, float base_charge = -1.0f, float base_mass = 1.0f);
