@@ -17,6 +17,7 @@ cc_library(
         "EnergyVerifier.hpp",
         "CurrentVerifier.hpp",
         "LandauVerifier.hpp",
+        "ParticleSortLocalityVerifier.hpp",
     ],
     visibility = ["//visibility:public"],
 )
