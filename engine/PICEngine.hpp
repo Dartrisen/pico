@@ -306,8 +306,8 @@ private:
     FieldInjectorT                                    field_injector_;
     pico::modules::sorter::ParticleSorter<BLOCK_SIZE> sorter_;
 
-    alignas(64) std::vector<FieldSystem<BLOCK_SIZE>> thread_currents_;
-    alignas(64) std::vector<FieldScratch<BLOCK_SIZE>> thread_scratch_;
+    std::vector<FieldSystem<BLOCK_SIZE>>  thread_currents_;
+    std::vector<FieldScratch<BLOCK_SIZE>> thread_scratch_;
 
     std::size_t particles_per_cell_{10};
 
