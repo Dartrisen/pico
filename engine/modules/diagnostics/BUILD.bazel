@@ -18,6 +18,7 @@ cc_library(
         "CurrentVerifier.hpp",
         "LandauVerifier.hpp",
         "ParticleSortLocalityVerifier.hpp",
+        "WeibelVerifier.hpp",
     ],
     visibility = ["//visibility:public"],
 )
