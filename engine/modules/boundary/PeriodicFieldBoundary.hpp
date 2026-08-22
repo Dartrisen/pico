@@ -18,21 +18,21 @@ struct PeriodicBoundaryFieldHandler
 
         for (std::size_t g = 0; g < G; ++g)
         {
-            // Left guard cell -> Right physical cell
             J.field_x(N + g) += J.field_x(g);
-            J.field_x(g) = 0.0f;
             J.field_y(N + g) += J.field_y(g);
-            J.field_y(g) = 0.0f;
             J.field_z(N + g) += J.field_z(g);
-            J.field_z(g) = 0.0f;
 
-            // Right guard cell -> Left physical cell
             J.field_x(G + g) += J.field_x(N + G + g);
-            J.field_x(N + G + g) = 0.0f;
             J.field_y(G + g) += J.field_y(N + G + g);
-            J.field_y(N + G + g) = 0.0f;
             J.field_z(G + g) += J.field_z(N + G + g);
-            J.field_z(N + G + g) = 0.0f;
+
+            J.field_x(g) = J.field_x(N + g);
+            J.field_y(g) = J.field_y(N + g);
+            J.field_z(g) = J.field_z(N + g);
+
+            J.field_x(N + G + g) = J.field_x(G + g);
+            J.field_y(N + G + g) = J.field_y(G + g);
+            J.field_z(N + G + g) = J.field_z(G + g);
         }
     }
 
