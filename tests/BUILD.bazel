@@ -12,3 +12,16 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_test(
+    name = "boris_test",
+    srcs = [
+        "test_boris.cpp"
+    ],
+    deps = [
+        "//data/particle",
+        "//data/field",
+        "//kernels/pusher:pusher",
+        "@googletest//:gtest_main",
+    ],
+)
