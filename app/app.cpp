@@ -8,7 +8,7 @@
 #include "engine/modules/deposit/Deposit.hpp"
 #include "engine/modules/field/YeeMaxwell.hpp"
 #include "engine/modules/gather/Gather.hpp"
-#include "engine/modules/injector/PlaneWaveLaserInjector.hpp"
+#include "engine/modules/injector/Injectors.hpp"
 #include "engine/modules/pusher/BorisPusher.hpp"
 #include "kernels/shapes/shape.hpp"
 
