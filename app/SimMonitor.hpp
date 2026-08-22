@@ -4,18 +4,20 @@
 #include "IEngine.hpp"
 #include "engine/perf/PipelineProfiler.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <string>
 
 class SimMonitor
 {
 public:
-    using clock = std::chrono::high_resolution_clock;
+    // Uses steady_clock to prevent time jumps from NTP updates
+    using clock = std::chrono::steady_clock;
 
     void start(const IEngine& engine, double dt, int nsteps, int log_interval)
     {
@@ -42,24 +44,30 @@ public:
         const double eta_sec     = (progress > 0.0 && progress < 1.0) ? (total_sec / progress) * (1.0 - progress) : 0.0;
         const double stride      = engine.mean_cell_stride();
 
-        constexpr int bar_width = 10;
-        const int     filled    = static_cast<int>(std::round(bar_width * progress));
-        std::string   bar       = "[";
-        for (int i = 0; i < bar_width; ++i)
-            bar += (i < filled ? "█" : "░");
-        bar += "]";
+        // Zero-allocation stack buffers for string alignment
+        char lat_buf[32], mpsp_buf[32], stride_buf[32];
+        std::snprintf(lat_buf, sizeof(lat_buf), "%.2f ms", avg_step_ms);
+        std::snprintf(mpsp_buf, sizeof(mpsp_buf), "%.1f MPSP", mpsp);
 
-        std::ostringstream lat_ss, mpsp_ss, stride_ss, pct_ss;
-        lat_ss << std::fixed << std::setprecision(2) << avg_step_ms << " ms";
-        mpsp_ss << std::fixed << std::setprecision(1) << mpsp << " MPSP";
-        stride_ss << std::fixed << std::setprecision(2) << stride << " ΔC";
-        pct_ss << std::right << std::setw(3) << static_cast<int>(progress * 100.0) << "%";
+        if (stride > 0.0)
+            std::snprintf(stride_buf, sizeof(stride_buf), "%.2f ΔC", stride);
+        else
+            std::snprintf(stride_buf, sizeof(stride_buf), "N/A");
+
+        constexpr int bar_width = 10;
+        const int     filled    = std::clamp(static_cast<int>(std::round(bar_width * progress)), 0, bar_width);
 
         using namespace pico::ui;
         std::cout << CYAN << std::left << std::setw(8) << step << RESET << std::left << std::setw(12) << std::fixed << std::setprecision(4) << (step * dt_) << YELLOW << std::left
-                  << std::setw(14) << lat_ss.str() << RESET << GREEN << std::left << std::setw(16) << mpsp_ss.str() << RESET << BLUE << std::left << std::setw(12)
-                  << stride_ss.str() << RESET << MAGENTA << bar << " " << pct_ss.str() << "   " << RESET << GRAY << std::left << std::setw(10) << format_duration(eta_sec) << RESET
-                  << "\n";
+                  << std::setw(14) << lat_buf << RESET << GREEN << std::left << std::setw(16) << mpsp_buf << RESET << BLUE << std::left << std::setw(12) << stride_buf << RESET
+                  << MAGENTA << '[';
+
+        // Zero-allocation progress bar output
+        for (int i = 0; i < bar_width; ++i)
+            std::cout << (i < filled ? "█" : "░");
+
+        std::cout << "] " << std::right << std::setw(3) << static_cast<int>(progress * 100.0) << "%   " << RESET << GRAY << std::left << std::setw(10) << format_duration(eta_sec)
+                  << RESET << "\n";
     }
 
     void print_final_report(const IEngine& engine) const
@@ -74,29 +82,41 @@ public:
         const auto&  profiler      = engine.profiler();
         const double profiled_time = profiler.total_seconds();
 
-        std::cout << BOLD << WHITE << " Pipeline Kernel Execution Breakdown:\n" << RESET;
-        std::cout << GRAY << " ┌──────────────────────────────────────┬──────────────┬───────────┬────────────────┐\n" << RESET;
-        std::cout << " │ " << BOLD << std::left << std::setw(36) << "Stage / Kernel" << RESET << " │ " << BOLD << std::setw(12) << "Wall Time" << RESET << " │ " << BOLD
-                  << std::setw(9) << "Share" << RESET << " │ " << BOLD << std::setw(14) << "Cost / Part" << RESET << " │\n";
-        std::cout << GRAY << " ├──────────────────────────────────────┼──────────────┼───────────┼────────────────┤\n" << RESET;
-
-        for (std::size_t i = 0; i < static_cast<std::size_t>(pico::perf::Stage::Count); ++i)
+        if (profiled_time > 0.0)
         {
-            const auto   stage       = static_cast<pico::perf::Stage>(i);
-            const double t           = profiler.seconds(stage);
-            const double pct         = (profiled_time > 0.0) ? (t / profiled_time) * 100.0 : 0.0;
-            const double ns_per_part = (total_part_steps > 0) ? (t * 1e9) / total_part_steps : 0.0;
+            std::cout << BOLD << WHITE << " Pipeline Kernel Execution Breakdown:\n" << RESET;
+            std::cout << GRAY << " ┌──────────────────────────────────────┬──────────────┬───────────┬────────────────┐\n" << RESET;
+            std::cout << " │ " << BOLD << std::left << std::setw(36) << "Stage / Kernel" << RESET << " │ " << BOLD << std::setw(12) << "Wall Time" << RESET << " │ " << BOLD
+                      << std::setw(9) << "Share" << RESET << " │ " << BOLD << std::setw(14) << "Cost / Part" << RESET << " │\n";
+            std::cout << GRAY << " ├──────────────────────────────────────┼──────────────┼───────────┼────────────────┤\n" << RESET;
 
-            std::ostringstream time_ss, pct_ss, ns_ss;
-            time_ss << pico::perf::PipelineProfiler::format_time(t);
-            pct_ss << std::fixed << std::setprecision(1) << pct << " %";
-            ns_ss << std::fixed << std::setprecision(2) << ns_per_part << " ns";
+            for (std::size_t i = 0; i < static_cast<std::size_t>(pico::perf::Stage::Count); ++i)
+            {
+                const auto   stage = static_cast<pico::perf::Stage>(i);
+                const double t     = profiler.seconds(stage);
 
-            std::cout << " │ " << CYAN << std::left << std::setw(36) << pico::perf::STAGE_NAMES[i] << RESET << " │ " << YELLOW << std::right << std::setw(12) << time_ss.str()
-                      << RESET << " │ " << GREEN << std::right << std::setw(9) << pct_ss.str() << RESET << " │ " << MAGENTA << std::right << std::setw(14) << ns_ss.str() << RESET
-                      << " │\n";
+                if (t <= 0.0)
+                    continue;
+
+                const double pct         = (t / profiled_time) * 100.0;
+                const double ns_per_part = (total_part_steps > 0) ? (t * 1e9) / total_part_steps : 0.0;
+
+                char pct_buf[16];
+                std::snprintf(pct_buf, sizeof(pct_buf), "%.1f %%", pct);
+
+                const std::string time_str = pico::perf::PipelineProfiler::format_time(t);
+                const std::string ns_str   = pico::perf::PipelineProfiler::format_ns(ns_per_part);
+
+                std::cout << " │ " << CYAN << std::left << std::setw(36) << pico::perf::STAGE_NAMES[i] << RESET << " │ " << YELLOW << std::right << std::setw(12) << time_str
+                          << RESET << " │ " << GREEN << std::right << std::setw(9) << pct_buf << RESET << " │ " << MAGENTA << std::right << std::setw(14) << ns_str << RESET
+                          << " │\n";
+            }
+            std::cout << GRAY << " └──────────────────────────────────────┴──────────────┴───────────┴────────────────┘\n\n" << RESET;
         }
-        std::cout << GRAY << " └──────────────────────────────────────┴──────────────┴───────────┴────────────────┘\n\n" << RESET;
+        else
+        {
+            std::cout << GRAY << " Pipeline Kernel Execution Breakdown : Disabled\n\n" << RESET;
+        }
 
         if (total_part_steps > 0)
         {
@@ -108,7 +128,12 @@ public:
             std::cout << "   • Total Particle Updates : " << total_part_steps << "\n";
             std::cout << "   • Average Throughput     : " << GREEN << std::fixed << std::setprecision(2) << avg_mpsp << " MPSP" << RESET << "\n";
             std::cout << "   • Total Cost / Particle  : " << MAGENTA << std::fixed << std::setprecision(2) << overall_ns_part << " ns/particle-step" << RESET << "\n";
-            std::cout << "   • Spatial Stride (ΔC)    : " << BLUE << std::fixed << std::setprecision(3) << final_stride << " cells/pair" << RESET << "\n\n";
+
+            std::cout << "   • Spatial Stride (ΔC)    : ";
+            if (final_stride > 0.0)
+                std::cout << BLUE << std::fixed << std::setprecision(3) << final_stride << " cells/pair" << RESET << "\n\n";
+            else
+                std::cout << GRAY << "N/A (Diagnostics Disabled)" << RESET << "\n\n";
         }
     }
 
@@ -119,17 +144,17 @@ private:
             return "0.0s";
         if (seconds < 60.0)
         {
-            std::ostringstream ss;
-            ss << std::fixed << std::setprecision(1) << seconds << "s";
-            return ss.str();
+            char buf[16];
+            std::snprintf(buf, sizeof(buf), "%.1fs", seconds);
+            return std::string(buf);
         }
         const int total_sec = static_cast<int>(seconds);
         const int mins      = total_sec / 60;
         const int secs      = total_sec % 60;
 
-        std::ostringstream ss;
-        ss << mins << "m " << std::setw(2) << std::setfill('0') << secs << "s";
-        return ss.str();
+        char buf[16];
+        std::snprintf(buf, sizeof(buf), "%dm %02ds", mins, secs);
+        return std::string(buf);
     }
 
     void print_banner(const IEngine& engine) const

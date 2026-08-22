@@ -5,6 +5,7 @@ cc_library(
     hdrs = [
         "PipelineProfiler.hpp",
         "LocalityProfiler.hpp",
+        "CycleClock.hpp",
     ],
     visibility = ["//visibility:public"],
 )

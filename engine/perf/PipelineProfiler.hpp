@@ -1,8 +1,9 @@
 #pragma once
 
+#include "CycleClock.hpp"
+
 #include <array>
 #include <atomic>
-#include <chrono>
 #include <cstdint>
 #include <iomanip>
 #include <sstream>
@@ -28,26 +29,18 @@ constexpr std::array<std::string_view, static_cast<std::size_t>(Stage::Count)> S
 class PipelineProfiler
 {
 public:
-    using clock = std::chrono::high_resolution_clock;
-
     PipelineProfiler() = default;
 
     PipelineProfiler(PipelineProfiler&& other) noexcept
     {
-        for (std::size_t i = 0; i < static_cast<std::size_t>(Stage::Count); ++i)
-        {
-            accumulated_ns_[i].store(other.accumulated_ns_[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
-        }
+        assign_from(other);
     }
 
     PipelineProfiler& operator=(PipelineProfiler&& other) noexcept
     {
         if (this != &other)
         {
-            for (std::size_t i = 0; i < static_cast<std::size_t>(Stage::Count); ++i)
-            {
-                accumulated_ns_[i].store(other.accumulated_ns_[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
-            }
+            assign_from(other);
         }
         return *this;
     }
@@ -59,15 +52,13 @@ public:
     {
         PipelineProfiler& profiler;
         Stage             stage;
-        clock::time_point start;
+        std::uint64_t     start_ticks;
 
-        ScopedTimer(PipelineProfiler& p, Stage s) : profiler(p), stage(s), start(clock::now()) {}
+        ScopedTimer(PipelineProfiler& p, Stage s) : profiler(p), stage(s), start_ticks(read_cpu_ticks()) {}
 
         ~ScopedTimer()
         {
-            const auto duration = clock::now() - start;
-            const auto ns       = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
-            profiler.add_nanoseconds(stage, static_cast<std::uint64_t>(ns));
+            profiler.add_ticks(stage, read_cpu_ticks() - start_ticks);
         }
     };
 
@@ -79,6 +70,12 @@ public:
     void add_nanoseconds(Stage stage, std::uint64_t ns) noexcept
     {
         accumulated_ns_[static_cast<std::size_t>(stage)].fetch_add(ns, std::memory_order_relaxed);
+    }
+
+    void add_ticks(Stage stage, std::uint64_t ticks) noexcept
+    {
+        const auto ns = static_cast<std::uint64_t>(ticks * ticks_to_nanoseconds_scale());
+        add_nanoseconds(stage, ns);
     }
 
     void reset() noexcept
@@ -118,33 +115,37 @@ public:
         return sum;
     }
 
-    // Auto-scaling dynamic duration formatter
-    static std::string format_time(double seconds)
+    static std::string format_ns(double ns)
     {
         std::ostringstream ss;
         ss << std::fixed << std::setprecision(2);
 
-        if (seconds >= 1.0)
-        {
-            ss << seconds << " s";
-        }
-        else if (seconds >= 1e-3)
-        {
-            ss << (seconds * 1e3) << " ms";
-        }
-        else if (seconds >= 1e-6)
-        {
-            ss << (seconds * 1e6) << " us";
-        }
+        if (ns >= 1e9)
+            ss << (ns * 1e-9) << " s";
+        else if (ns >= 1e6)
+            ss << (ns * 1e-6) << " ms";
+        else if (ns >= 1000.0)
+            ss << (ns * 1e-3) << " us";
         else
-        {
-            ss << (seconds * 1e9) << " ns";
-        }
+            ss << ns << " ns";
 
         return ss.str();
     }
 
+    static std::string format_time(double seconds)
+    {
+        return format_ns(seconds * 1e9);
+    }
+
 private:
+    void assign_from(const PipelineProfiler& other) noexcept
+    {
+        for (std::size_t i = 0; i < static_cast<std::size_t>(Stage::Count); ++i)
+        {
+            accumulated_ns_[i].store(other.accumulated_ns_[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
+        }
+    }
+
     std::array<std::atomic<std::uint64_t>, static_cast<std::size_t>(Stage::Count)> accumulated_ns_{};
 };
 
