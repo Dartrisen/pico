@@ -100,94 +100,41 @@ public:
         {
             execute_stage(pico::perf::Stage::Sorting, [&] { sorter_.sort(particles_, grid); });
         }
-
         execute_stage(pico::perf::Stage::Boundaries, [&] { field_boundary_.fill_field_guards(fields_, grid); });
 
         current_.zero_out();
         ensure_thread_buffers(grid);
 
-        if (enable_locality_diagnostics_)
-        {
-            locality_metrics_.reset();
-        }
-
-        int actual_threads = 0;
         // clang-format off
         #pragma omp parallel
         // clang-format on
         {
-            // clang-format off
-            #pragma omp master
-            // clang-format on
-            actual_threads = omp_get_num_threads();
-
             const int tid            = omp_get_thread_num();
             auto&     thread_current = thread_currents_[tid];
             auto&     thread_scratch = thread_scratch_[tid];
+            auto&     thread_metrics = thread_metrics_[tid];
 
             thread_current.zero_out();
+            thread_metrics.reset();
 
-            if (enable_stage_profiling_)
+            // clang-format off
+            #pragma omp for schedule(static)
+            // clang-format on
+            for (auto& block : particles_)
             {
-                // Local tick accumulators (zero overhead, stored on stack)
-                std::uint64_t local_gather_ticks  = 0;
-                std::uint64_t local_push_ticks    = 0;
-                std::uint64_t local_deposit_ticks = 0;
-
-                // clang-format off
-                #pragma omp for schedule(static)
-                // clang-format on
-                for (auto& block : particles_)
-                {
-                    const std::uint64_t t0 = pico::perf::read_cpu_ticks();
-                    gather_.gather_block(block, fields_, grid, thread_scratch);
-
-                    const std::uint64_t t1 = pico::perf::read_cpu_ticks();
-                    pusher_.push_block(block, thread_scratch, dt);
-                    particle_boundary_.apply(block, grid);
-
-                    const std::uint64_t t2 = pico::perf::read_cpu_ticks();
-                    deposit_.deposit_block(block, thread_current, grid, dt, particles_per_cell_);
-
-                    const std::uint64_t t3 = pico::perf::read_cpu_ticks();
-
-                    local_gather_ticks += (t1 - t0);
-                    local_push_ticks += (t2 - t1);
-                    local_deposit_ticks += (t3 - t2);
-
-                    if (enable_locality_diagnostics_)
-                    {
-                        pico::diagnostics::LocalityProfiler<particle::ParticleBlock<BLOCK_SIZE>>::process_block(block, grid, locality_metrics_);
-                    }
-                }
-
-                profiler_.add_ticks(pico::perf::Stage::Gather, local_gather_ticks);
-                profiler_.add_ticks(pico::perf::Stage::Pusher, local_push_ticks);
-                profiler_.add_ticks(pico::perf::Stage::Deposit, local_deposit_ticks);
-            }
-            else
-            {
-                // clang-format off
-                #pragma omp for schedule(static)
-                // clang-format on
-                for (auto& block : particles_)
-                {
-                    gather_.gather_block(block, fields_, grid, thread_scratch);
-                    pusher_.push_block(block, thread_scratch, dt);
-                    particle_boundary_.apply(block, grid);
-                    deposit_.deposit_block(block, thread_current, grid, dt, particles_per_cell_);
-
-                    if (enable_locality_diagnostics_)
-                    {
-                        pico::diagnostics::LocalityProfiler<particle::ParticleBlock<BLOCK_SIZE>>::process_block(block, grid, locality_metrics_);
-                    }
-                }
+                step_particle_block(block, thread_scratch, thread_current, thread_metrics, grid, dt);
             }
         }
 
-        for (int i = 0; i < actual_threads; ++i)
+        for (std::size_t i = 0; i < thread_currents_.size(); ++i)
         {
             current_.accumulate(thread_currents_[i]);
+        }
+
+        locality_metrics_.reset();
+        for (std::size_t i = 0; i < thread_metrics_.size(); ++i)
+        {
+            locality_metrics_.accumulate(thread_metrics_[i]);
         }
 
         execute_stage(pico::perf::Stage::Boundaries, [&] { field_boundary_.fold_currents(current_, grid); });
@@ -198,7 +145,6 @@ public:
                           field_solver_.solve(fields_, current_, dt);
                           field_injector_.inject(fields_, current_time, dt);
                       });
-
         ++step_counter_;
     }
 
@@ -289,12 +235,39 @@ private:
         {
             thread_currents_.reserve(nthreads);
             thread_scratch_.reserve(nthreads);
+            thread_metrics_.reserve(nthreads);
 
             for (std::size_t i = thread_currents_.size(); i < nthreads; ++i)
             {
                 thread_currents_.emplace_back(grid);
                 thread_scratch_.emplace_back();
+                thread_metrics_.emplace_back();
             }
+        }
+    }
+
+    void step_particle_block(auto& block, auto& scratch, auto& current, auto& thread_metrics, const Grid& grid, double dt)
+    {
+        const uint64_t t0 = enable_stage_profiling_ ? pico::perf::read_cpu_ticks() : 0;
+        gather_.gather_block(block, fields_, grid, scratch);
+
+        const uint64_t t1 = enable_stage_profiling_ ? pico::perf::read_cpu_ticks() : 0;
+        pusher_.push_block(block, scratch, dt);
+        particle_boundary_.apply(block, grid);
+
+        const uint64_t t2 = enable_stage_profiling_ ? pico::perf::read_cpu_ticks() : 0;
+        deposit_.deposit_block(block, current, grid, dt, particles_per_cell_);
+
+        if (enable_stage_profiling_)
+        {
+            const uint64_t t3 = pico::perf::read_cpu_ticks();
+            profiler_.add_ticks(pico::perf::Stage::Gather, t1 - t0);
+            profiler_.add_ticks(pico::perf::Stage::Pusher, t2 - t1);
+            profiler_.add_ticks(pico::perf::Stage::Deposit, t3 - t2);
+        }
+        if (enable_locality_diagnostics_)
+        {
+            pico::diagnostics::LocalityProfiler<particle::ParticleBlock<BLOCK_SIZE>>::process_block(block, grid, thread_metrics);
         }
     }
 
@@ -311,8 +284,9 @@ private:
     FieldInjectorT                                    field_injector_;
     pico::modules::sorter::ParticleSorter<BLOCK_SIZE> sorter_;
 
-    std::vector<FieldSystem<BLOCK_SIZE>>  thread_currents_;
-    std::vector<FieldScratch<BLOCK_SIZE>> thread_scratch_;
+    std::vector<FieldSystem<BLOCK_SIZE>>            thread_currents_;
+    std::vector<FieldScratch<BLOCK_SIZE>>           thread_scratch_;
+    std::vector<pico::diagnostics::LocalityMetrics> thread_metrics_;
 
     std::size_t particles_per_cell_{10};
 
@@ -323,6 +297,6 @@ private:
     pico::diagnostics::LocalityMetrics locality_metrics_{};
     double                             locality_threshold_{0.0};
 
-    bool enable_locality_diagnostics_{false};
-    bool enable_stage_profiling_{false};
+    bool enable_locality_diagnostics_{true};
+    bool enable_stage_profiling_{true};
 };

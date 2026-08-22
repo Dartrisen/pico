@@ -50,6 +50,12 @@ struct LocalityMetrics
             return 0.0;
         return static_cast<double>(total_stride.load(std::memory_order_relaxed)) / static_cast<double>(pairs);
     }
+
+    void accumulate(const LocalityMetrics& other) noexcept
+    {
+        total_stride.fetch_add(other.total_stride.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        total_pairs.fetch_add(other.total_pairs.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    }
 };
 
 template <typename ParticleBlock>
