@@ -16,6 +16,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -26,16 +27,16 @@
 
 int main()
 {
-    // Tuning for k * lambda_D ~ 0.31 (Measurable Kinetic Damping)
+    // Tuning for k * lambda_D ~ 0.31 with reduced PPC
     constexpr std::size_t grid_cells = 256;
     constexpr double      dx         = 0.1;
     constexpr double      dt         = 0.002;
-    constexpr std::size_t ppc        = 4000;
+    constexpr std::size_t ppc        = 1000;
     constexpr std::size_t nsteps     = 4000;
     constexpr std::size_t BS         = 256;
     constexpr float       target_n0  = 1.0f;
 
-    constexpr float  v1   = 0.05f; // Velocity wave amplitude
+    constexpr float  v1   = 0.08f; // Scaled wave perturbation to remain above noise floor at 1000 PPC
     constexpr double v_th = 4.0;   // Thermal velocity for k*lambda_D ~ 0.31
 
     assert(dx > 0.95 * dt && "CFL condition violated.");
@@ -53,7 +54,7 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    // 1. Initialize Engine & Native Thermal State Initialization
+    // 1. Initialize Engine & Native Thermal State
     EngineT engine_instance{grid, ppc, target_n0};
 
     const double L = static_cast<double>(grid_cells) * dx;
@@ -62,14 +63,25 @@ int main()
     auto& particles = engine_instance.particles();
     particles.init_positions_uniform(grid);
 
-    std::mt19937                    rng(42);
-    std::normal_distribution<float> v_dist(0.0f, static_cast<float>(v_th));
+    // Portable Box-Muller normal generator to eliminate OS-dependent std::normal_distribution variance
+    std::mt19937                          rng(42);
+    std::uniform_real_distribution<float> u_dist(1e-7f, 1.0f - 1e-7f);
+
+    auto sample_normal = [&](float mean, float stddev) -> float
+    {
+        const float u1 = u_dist(rng);
+        const float u2 = u_dist(rng);
+        const float z0 = std::sqrt(-2.0f * std::log(u1)) * std::cos(2.0f * std::numbers::pi_v<float> * u2);
+        return mean + z0 * stddev;
+    };
+
+    const float float_vth = static_cast<float>(v_th);
 
     particles.init_velocities_profile(
             [&](double x) -> std::tuple<float, float, float>
             {
                 const float v_wave = v1 * std::sin(static_cast<float>(k * x));
-                return {v_dist(rng) + v_wave, v_dist(rng), v_dist(rng)};
+                return {sample_normal(0.0f, float_vth) + v_wave, sample_normal(0.0f, float_vth), sample_normal(0.0f, float_vth)};
             });
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));

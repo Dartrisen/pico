@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <numbers>
 #include <numeric>
 #include <vector>
@@ -29,7 +30,11 @@ public:
         const double wp         = std::sqrt(n0_ / dx_);
         const double k_lambda_d = (k_ * v_th_) / wp;
 
-        // High-accuracy kinetic dispersion relation polynomial fit for Fried-Conte Z-function roots (k*lambda_D in [0.10, 0.45])
+        if (k_lambda_d < 0.10 || k_lambda_d > 0.45)
+        {
+            std::cerr << "[Warning] k*lambda_D = " << k_lambda_d << " is outside the calibrated polynomial range [0.10, 0.45]. Expected metrics may deviate.\n";
+        }
+
         const double x  = k_lambda_d;
         const double x2 = x * x;
         const double x3 = x2 * x;
@@ -67,9 +72,9 @@ public:
         }
         res.max_energy_drift_pct = max_drift;
 
-        // 2. Local Peak Extraction with Thermal Noise Floor Floor Thresholding
+        // 2. Local Peak Extraction with Parabolic Sub-Grid Interpolation
         const double e_max                 = *std::max_element(ex_energies_.begin(), ex_energies_.end());
-        const double noise_floor_threshold = e_max * 1e-5; // Stop fitting when signal reaches thermal particle noise
+        const double noise_floor_threshold = e_max * 1e-4; // Cutoff above discrete noise level
 
         std::vector<double> peak_times;
         std::vector<double> peak_log_energies;
@@ -82,7 +87,6 @@ public:
             if (t_curr < t_transient_cutoff)
                 continue;
 
-            // Clip peaks at the thermal noise floor to avoid flattening distortion
             if (ex_energies_[i] < noise_floor_threshold)
                 break;
 
@@ -91,8 +95,26 @@ public:
             {
                 if (peak_times.empty() || (t_curr - peak_times.back()) > 0.6 * expected_period_field)
                 {
-                    peak_times.push_back(t_curr);
-                    peak_log_energies.push_back(std::log(ex_energies_[i]));
+                    // 3-point quadratic interpolation around discrete peak
+                    const double y_prev = std::log(ex_energies_[i - 1]);
+                    const double y_curr = std::log(ex_energies_[i]);
+                    const double y_next = std::log(ex_energies_[i + 1]);
+
+                    const double denom = y_prev - 2.0 * y_curr + y_next;
+                    if (std::abs(denom) > 1e-12)
+                    {
+                        const double delta_t = 0.5 * dt_ * (y_prev - y_next) / denom;
+                        const double t_peak  = t_curr + delta_t;
+                        const double y_peak  = y_curr - 0.125 * ((y_prev - y_next) * (y_prev - y_next)) / denom;
+
+                        peak_times.push_back(t_peak);
+                        peak_log_energies.push_back(y_peak);
+                    }
+                    else
+                    {
+                        peak_times.push_back(t_curr);
+                        peak_log_energies.push_back(y_curr);
+                    }
                 }
             }
         }
