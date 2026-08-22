@@ -22,43 +22,6 @@
 #include <iostream>
 #include <memory>
 
-// Applies initial ballistic drift velocity along X
-template <typename Engine>
-void apply_drift_velocity(Engine& engine, std::size_t grid_cells, double dx, float v_drift)
-{
-    auto&        particles  = engine.particles();
-    const double L          = static_cast<double>(grid_cells) * dx;
-    const double dx_p       = L / static_cast<double>(particles.active_particles());
-    std::size_t  global_idx = 0;
-
-    for (auto& block : particles)
-    {
-        for (std::size_t i = 0; i < block.activeCount; ++i, ++global_idx)
-        {
-            const double x0     = (static_cast<double>(global_idx) + 0.5) * dx_p;
-            block.position_x[i] = static_cast<float>(x0);
-
-            const float m       = block.mass[i];
-            block.momentum_x[i] = m * v_drift;
-            block.momentum_y[i] = 0.0f;
-            block.momentum_z[i] = 0.0f;
-        }
-    }
-}
-
-// Zeroes Electric field components to maintain unperturbed ballistic drift
-template <typename Engine>
-void freeze_electric_field(Engine& eng, std::size_t grid_cells)
-{
-    auto& E = eng.fields().E;
-    for (std::size_t i = 0; i < grid_cells; ++i)
-    {
-        E.field_x(i) = 0.0f;
-        E.field_y(i) = 0.0f;
-        E.field_z(i) = 0.0f;
-    }
-}
-
 int main()
 {
     constexpr std::size_t grid_cells = 256;
@@ -85,9 +48,12 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    // 1. Initialize Engine & Setup Drift
+    // 1. Initialize Engine & Native Initial Particle Drift
     EngineT engine_instance{grid, ppc, target_n0};
-    apply_drift_velocity(engine_instance, grid_cells, dx, v_drift);
+
+    auto& particles = engine_instance.particles();
+    particles.init_positions_uniform(grid);
+    particles.init_velocities_cold(v_drift, 0.0f, 0.0f);
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
@@ -108,7 +74,7 @@ int main()
             {
                 auto& eng = concrete_wrapper->engine();
 
-                freeze_electric_field(eng, grid_cells);
+                eng.fields().E.zero_out();
 
                 // Standardized energy and current diagnostic reductions
                 const auto energy_m  = EnergyDiag::evaluate(eng);

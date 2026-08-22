@@ -20,32 +20,6 @@
 #include <memory>
 #include <numbers>
 
-// Applies sinusoidal/helical wave velocity perturbation
-template <typename Engine>
-void apply_wave_perturbation(Engine& engine, std::size_t grid_cells, double dx)
-{
-    auto&           particles = engine.particles();
-    const double    L         = static_cast<double>(grid_cells) * dx;
-    const double    k         = 2.0 * std::numbers::pi / L;
-    constexpr float v0        = 0.05f;
-    const double    dx_p      = L / static_cast<double>(particles.active_particles());
-
-    std::size_t global_idx = 0;
-    for (auto& block : particles)
-    {
-        for (std::size_t i = 0; i < block.activeCount; ++i, ++global_idx)
-        {
-            const double x0     = (static_cast<double>(global_idx) + 0.5) * dx_p;
-            block.position_x[i] = static_cast<float>(x0);
-
-            const float m       = block.mass[i];
-            block.momentum_x[i] = m * v0 * std::sin(static_cast<float>(k * x0));
-            block.momentum_y[i] = m * v0 * std::cos(static_cast<float>(k * x0));
-            block.momentum_z[i] = 0.0f;
-        }
-    }
-}
-
 int main()
 {
     // 1. Simulation Parameters
@@ -73,7 +47,14 @@ int main()
 
     // 2. Engine Initialization & Particle Setup
     EngineT engine_instance{grid, ppc};
-    apply_wave_perturbation(engine_instance, grid_cells, dx);
+
+    const double    L  = static_cast<double>(grid_cells) * dx;
+    const double    k  = 2.0 * std::numbers::pi / L;
+    constexpr float v0 = 0.05f;
+
+    auto& particles = engine_instance.particles();
+    particles.init_positions_uniform(grid);
+    particles.init_velocities_wave(v0, k, /*longitudinal_only=*/false);
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();

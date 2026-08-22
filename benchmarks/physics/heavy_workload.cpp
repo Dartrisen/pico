@@ -22,33 +22,6 @@
 #include <numbers>
 #include <sstream>
 
-// Applies initial plasma wave velocity perturbation
-template <typename Engine>
-void apply_wave_perturbation(Engine& engine, std::size_t grid_cells, double dx)
-{
-    auto&           particles = engine.particles();
-    const double    L         = static_cast<double>(grid_cells) * dx;
-    const double    k         = 2.0 * std::numbers::pi / L;
-    constexpr float v0        = 0.05f;
-    const double    dx_p      = L / static_cast<double>(particles.active_particles());
-
-    std::size_t global_idx = 0;
-    for (auto& block : particles)
-    {
-        for (std::size_t i = 0; i < block.activeCount; ++i, ++global_idx)
-        {
-            const double x0 = (static_cast<double>(global_idx) + 0.5) * dx_p;
-
-            block.position_x[i] = static_cast<float>(x0);
-
-            const float local_m = block.mass[i];
-            block.momentum_x[i] = local_m * v0 * std::sin(static_cast<float>(k * x0));
-            block.momentum_y[i] = 0.0f;
-            block.momentum_z[i] = 0.0f;
-        }
-    }
-}
-
 int main()
 {
     // Heavy Workload Parameters (~2.04M Particles, Order-3 Cubic Splines, 1000 Steps)
@@ -76,9 +49,16 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    // 1. Initialize Engine & Setup Initial Wave
+    // 1. Initialize Engine & Native Wave Perturbation
     EngineT engine_instance{grid, ppc, target_n0};
-    apply_wave_perturbation(engine_instance, grid_cells, dx);
+
+    const double    L  = static_cast<double>(grid_cells) * dx;
+    const double    k  = 2.0 * std::numbers::pi / L;
+    constexpr float v0 = 0.05f;
+
+    auto& particles = engine_instance.particles();
+    particles.init_positions_uniform(grid);
+    particles.init_velocities_wave(v0, k, /*longitudinal_only=*/true);
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();

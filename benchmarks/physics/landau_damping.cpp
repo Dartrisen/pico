@@ -22,35 +22,7 @@
 #include <numbers>
 #include <random>
 #include <sstream>
-
-// Initializes particle positions and applies Maxwell-Boltzmann thermal distribution + wave perturbation
-template <typename Engine>
-void initialize_thermal_wave(Engine& engine, std::size_t grid_cells, double dx, double v_th, float v1, double k)
-{
-    auto&        particles = engine.particles();
-    const double L         = static_cast<double>(grid_cells) * dx;
-    const double dx_p      = L / static_cast<double>(particles.active_particles());
-
-    std::mt19937                    rng(42);
-    std::normal_distribution<float> v_dist(0.0f, static_cast<float>(v_th));
-
-    std::size_t global_idx = 0;
-    for (auto& block : particles)
-    {
-        for (std::size_t i = 0; i < block.activeCount; ++i, ++global_idx)
-        {
-            const double x0     = (static_cast<double>(global_idx) + 0.5) * dx_p;
-            block.position_x[i] = static_cast<float>(x0);
-
-            const float local_m = block.mass[i];
-            const float v_wave  = v1 * std::sin(static_cast<float>(k * x0));
-
-            block.momentum_x[i] = local_m * (v_dist(rng) + v_wave);
-            block.momentum_y[i] = local_m * v_dist(rng);
-            block.momentum_z[i] = local_m * v_dist(rng);
-        }
-    }
-}
+#include <tuple>
 
 int main()
 {
@@ -81,13 +53,24 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    // 1. Initialize Engine & Thermal State
+    // 1. Initialize Engine & Native Thermal State Initialization
     EngineT engine_instance{grid, ppc, target_n0};
 
     const double L = static_cast<double>(grid_cells) * dx;
     const double k = 2.0 * std::numbers::pi / L;
 
-    initialize_thermal_wave(engine_instance, grid_cells, dx, v_th, v1, k);
+    auto& particles = engine_instance.particles();
+    particles.init_positions_uniform(grid);
+
+    std::mt19937                    rng(42);
+    std::normal_distribution<float> v_dist(0.0f, static_cast<float>(v_th));
+
+    particles.init_velocities_profile(
+            [&](double x) -> std::tuple<float, float, float>
+            {
+                const float v_wave = v1 * std::sin(static_cast<float>(k * x));
+                return {v_dist(rng) + v_wave, v_dist(rng), v_dist(rng)};
+            });
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
