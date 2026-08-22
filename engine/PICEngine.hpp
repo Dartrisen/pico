@@ -112,10 +112,13 @@ public:
         }
 
         int actual_threads = 0;
-
-#pragma omp parallel
+        // clang-format off
+        #pragma omp parallel
+        // clang-format on
         {
-#pragma omp master
+            // clang-format off
+            #pragma omp master
+            // clang-format on
             actual_threads = omp_get_num_threads();
 
             const int tid            = omp_get_thread_num();
@@ -131,7 +134,9 @@ public:
                 std::uint64_t local_push_ticks    = 0;
                 std::uint64_t local_deposit_ticks = 0;
 
-#pragma omp for schedule(static)
+                // clang-format off
+                #pragma omp for schedule(static)
+                // clang-format on
                 for (auto& block : particles_)
                 {
                     const std::uint64_t t0 = pico::perf::read_cpu_ticks();
@@ -162,7 +167,9 @@ public:
             }
             else
             {
-#pragma omp for schedule(static)
+                // clang-format off
+                #pragma omp for schedule(static)
+                // clang-format on
                 for (auto& block : particles_)
                 {
                     gather_.gather_block(block, fields_, grid, thread_scratch);
@@ -178,8 +185,6 @@ public:
             }
         }
 
-        // Parallel current reduction across active OpenMP threads
-#pragma omp parallel for schedule(static) if (actual_threads > 1)
         for (int i = 0; i < actual_threads; ++i)
         {
             current_.accumulate(thread_currents_[i]);
