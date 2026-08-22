@@ -6,9 +6,11 @@
 #include "engine/modules/boundary/PeriodicParticleBoundary.hpp"
 #include "engine/modules/boundary/SilverMuller.hpp"
 #include "engine/modules/deposit/Deposit.hpp"
+#include "engine/modules/diagnostics/EnergyDiagnostic.hpp"
+#include "engine/modules/diagnostics/FieldEnvelopeDiagnostic.hpp"
 #include "engine/modules/field/YeeMaxwell.hpp"
 #include "engine/modules/gather/Gather.hpp"
-#include "engine/modules/injector/PlaneWaveLaserInjector.hpp"
+#include "engine/modules/injector/Injectors.hpp"
 #include "engine/modules/pusher/BorisPusher.hpp"
 #include "kernels/shapes/shape.hpp"
 
@@ -17,59 +19,6 @@
 #include <cmath>
 #include <iostream>
 #include <memory>
-#include <vector>
-
-struct StepFieldData
-{
-    double              e_field{0.0};
-    std::vector<double> local_u;
-};
-
-// Computes transverse EM energy density (Ey^2 + Bz^2) and total integrated transverse field energy
-template <typename Engine>
-StepFieldData compute_field_energy(const Engine& eng, const Grid& grid, std::size_t grid_cells, double dx)
-{
-    StepFieldData result;
-    result.local_u.resize(grid_cells, 0.0);
-    const auto& fields = eng.fields();
-
-    for (std::size_t i = 0; i < grid_cells; ++i)
-    {
-        const std::size_t buf_i          = grid.physical_to_buffer(i);
-        const float       ey             = fields.E.field_y(buf_i);
-        const float       bz             = fields.B.field_z(buf_i);
-        const double      energy_density = 0.5 * static_cast<double>(ey * ey + bz * bz);
-
-        result.local_u[i] = energy_density;
-        result.e_field += energy_density * dx;
-    }
-    return result;
-}
-
-// Applies a moving-window smoothing filter over energy density to extract the envelope peak x-position
-double find_envelope_peak_x(const std::vector<double>& local_u, std::size_t grid_cells, double dx, int window_half_width)
-{
-    double      max_env_density = 0.0;
-    std::size_t max_env_idx     = 0;
-
-    const int min_i = window_half_width;
-    const int max_i = static_cast<int>(grid_cells) - window_half_width;
-
-    for (int i = min_i; i < max_i; ++i)
-    {
-        double sum = 0.0;
-        for (int w = -window_half_width; w <= window_half_width; ++w)
-        {
-            sum += local_u[static_cast<std::size_t>(i + w)];
-        }
-        if (sum > max_env_density)
-        {
-            max_env_density = sum;
-            max_env_idx     = static_cast<std::size_t>(i);
-        }
-    }
-    return static_cast<double>(max_env_idx) * dx;
-}
 
 int main()
 {
@@ -112,6 +61,9 @@ int main()
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
 
+    using EnergyDiag   = pico::diagnostics::EnergyDiagnostic<EngineT>;
+    using EnvelopeDiag = pico::diagnostics::FieldEnvelopeDiagnostic<EngineT>;
+
     PICApp app(std::move(wrapper), dt);
 
     double max_field_energy   = 0.0;
@@ -122,15 +74,16 @@ int main()
     app.run(nsteps,
             [&](int step_idx)
             {
-                const std::size_t step = static_cast<std::size_t>(step_idx);
+                const std::size_t step     = static_cast<std::size_t>(step_idx);
+                const auto        energy_m = EnergyDiag::evaluate(concrete_wrapper->engine());
+                const double      e_field  = energy_m.e_field_total();
 
-                const auto [e_field, local_u] = compute_field_energy(concrete_wrapper->engine(), grid, grid_cells, dx);
-                max_field_energy              = std::max(max_field_energy, e_field);
+                max_field_energy = std::max(max_field_energy, e_field);
 
                 if (step == mid_check_step)
                 {
-                    constexpr int window_half_width = 30;
-                    measured_peak_x                 = find_envelope_peak_x(local_u, grid_cells, dx, window_half_width);
+                    const auto env  = EnvelopeDiag::evaluate(concrete_wrapper->engine(), /*smoothing_window=*/30);
+                    measured_peak_x = env.peak_x;
                 }
 
                 if (step == nsteps - 1)

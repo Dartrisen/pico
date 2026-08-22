@@ -6,10 +6,11 @@
 #include "engine/modules/boundary/PeriodicFieldBoundary.hpp"
 #include "engine/modules/boundary/PeriodicParticleBoundary.hpp"
 #include "engine/modules/deposit/Deposit.hpp"
+#include "engine/modules/diagnostics/EnergyDiagnostic.hpp"
 #include "engine/modules/diagnostics/PlasmaWaveVerifier.hpp"
 #include "engine/modules/field/YeeMaxwell.hpp"
 #include "engine/modules/gather/Gather.hpp"
-#include "engine/modules/injector/PlaneWaveLaserInjector.hpp"
+#include "engine/modules/injector/Injectors.hpp"
 #include "engine/modules/pusher/BorisPusher.hpp"
 #include "kernels/shapes/shape.hpp"
 
@@ -19,12 +20,6 @@
 #include <memory>
 #include <numbers>
 #include <sstream>
-
-struct EnergyMetrics
-{
-    double e_ex{0.0};
-    double e_total{0.0};
-};
 
 // Applies sinusoidal velocity perturbation while preserving initial charge and mass scaling
 template <typename Engine>
@@ -51,45 +46,6 @@ void apply_wave_perturbation(Engine& engine, std::size_t grid_cells, double dx)
             block.momentum_z[i] = 0.0f;
         }
     }
-}
-
-// Single-pass computation for longitudinal Ex field energy and total system energy
-template <typename Engine>
-EnergyMetrics compute_energies(const Engine& eng, std::size_t grid_cells, double dx, std::size_t ppc)
-{
-    double      e_ex    = 0.0;
-    double      e_field = 0.0;
-    const auto& fields  = eng.fields();
-
-    for (std::size_t i = 0; i < grid_cells; ++i)
-    {
-        const double ex = fields.E.field_x(i);
-        const double ey = fields.E.field_y(i);
-        const double ez = fields.E.field_z(i);
-        const double bx = fields.B.field_x(i);
-        const double by = fields.B.field_y(i);
-        const double bz = fields.B.field_z(i);
-
-        const double ex2 = ex * ex;
-        e_ex += 0.5 * ex2 * dx;
-        e_field += 0.5 * (ex2 + ey * ey + ez * ez + bx * bx + by * by + bz * bz) * dx;
-    }
-
-    double e_kin = 0.0;
-    for (const auto& block : eng.particles())
-    {
-        for (std::size_t i = 0; i < block.activeCount; ++i)
-        {
-            const double px = block.momentum_x[i];
-            const double py = block.momentum_y[i];
-            const double pz = block.momentum_z[i];
-            const double m  = block.mass[i];
-            e_kin += 0.5 * (px * px + py * py + pz * pz) / m;
-        }
-    }
-    e_kin /= static_cast<double>(ppc);
-
-    return {e_ex, e_field + e_kin};
 }
 
 int main()
@@ -124,8 +80,9 @@ int main()
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
 
-    // 2. Setup Verification & Application Driver
+    // 2. Setup Verification & Diagnostics
     pico::diagnostics::PlasmaWaveVerifier verifier(dt, dx, ppc, target_n0);
+    using EnergyDiag = pico::diagnostics::EnergyDiagnostic<EngineT>;
 
     PICApp app(std::move(wrapper), dt);
 
@@ -133,8 +90,9 @@ int main()
     app.run(nsteps,
             [&](int /*step*/)
             {
-                const auto [e_ex, e_total] = compute_energies(concrete_wrapper->engine(), grid_cells, dx, ppc);
-                verifier.record_step(e_ex, e_total);
+                const auto& eng = concrete_wrapper->engine();
+                const auto  m   = EnergyDiag::evaluate(eng);
+                verifier.record_step(m.e_ex, m.e_total());
             });
 
     // 4. Verification Analysis & Reporting

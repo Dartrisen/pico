@@ -6,10 +6,11 @@
 #include "engine/modules/boundary/PeriodicFieldBoundary.hpp"
 #include "engine/modules/boundary/Thermalizing.hpp"
 #include "engine/modules/deposit/Deposit.hpp"
+#include "engine/modules/diagnostics/EnergyDiagnostic.hpp"
 #include "engine/modules/diagnostics/EnergyVerifier.hpp"
 #include "engine/modules/field/YeeMaxwell.hpp"
 #include "engine/modules/gather/Gather.hpp"
-#include "engine/modules/injector/PlaneWaveLaserInjector.hpp"
+#include "engine/modules/injector/Injectors.hpp"
 #include "engine/modules/pusher/BorisPusher.hpp"
 #include "kernels/shapes/shape.hpp"
 
@@ -18,12 +19,6 @@
 #include <iostream>
 #include <memory>
 #include <numbers>
-
-struct EnergyComponents
-{
-    double e_field{0.0};
-    double e_kin{0.0};
-};
 
 // Applies sinusoidal/helical wave velocity perturbation
 template <typename Engine>
@@ -49,42 +44,6 @@ void apply_wave_perturbation(Engine& engine, std::size_t grid_cells, double dx)
             block.momentum_z[i] = 0.0f;
         }
     }
-}
-
-// Computes electromagnetic field energy and kinetic energy
-template <typename Engine>
-EnergyComponents compute_energies(const Engine& eng, std::size_t grid_cells, double dx, std::size_t ppc)
-{
-    double      e_field = 0.0;
-    const auto& fields  = eng.fields();
-
-    for (std::size_t i = 0; i < grid_cells; ++i)
-    {
-        const double ex = fields.E.field_x(i);
-        const double ey = fields.E.field_y(i);
-        const double ez = fields.E.field_z(i);
-        const double bx = fields.B.field_x(i);
-        const double by = fields.B.field_y(i);
-        const double bz = fields.B.field_z(i);
-
-        e_field += 0.5 * (ex * ex + ey * ey + ez * ez + bx * bx + by * by + bz * bz) * dx;
-    }
-
-    double e_kin = 0.0;
-    for (const auto& block : eng.particles())
-    {
-        for (std::size_t i = 0; i < block.activeCount; ++i)
-        {
-            const double px = block.momentum_x[i];
-            const double py = block.momentum_y[i];
-            const double pz = block.momentum_z[i];
-            const double m  = block.mass[i];
-            e_kin += 0.5 * (px * px + py * py + pz * pz) / m;
-        }
-    }
-    e_kin /= static_cast<double>(ppc);
-
-    return {e_field, e_kin};
 }
 
 int main()
@@ -119,19 +78,21 @@ int main()
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
 
-    pico::diagnostics::EnergyVerifier verifier(/*drift_tolerance_pct=*/2.0);
+    // 3. Diagnostics Setup
+    pico::diagnostics::EnergyVerifier energy_verifier(/*drift_tolerance_pct=*/2.0);
+    using EnergyDiag = pico::diagnostics::EnergyDiagnostic<EngineT>;
 
-    // 3. Execution & Step Diagnostics
+    // 4. Execution & Step Diagnostics
     PICApp app(std::move(wrapper), dt);
     app.run(nsteps,
             [&](int /*step*/)
             {
-                const auto [e_field, e_kin] = compute_energies(concrete_wrapper->engine(), grid_cells, dx, ppc);
-                verifier.record_step(e_field, e_kin);
+                const auto m = EnergyDiag::evaluate(concrete_wrapper->engine());
+                energy_verifier.record_step(m.e_field_total(), m.e_kin);
             });
 
-    // 4. Verification & Reporting
-    const auto res = verifier.verify();
+    // 5. Verification & Reporting
+    const auto res = energy_verifier.verify();
 
     pico::ui::VerificationReport report("Energy Conservation Verification", res.passed);
 

@@ -6,11 +6,13 @@
 #include "engine/modules/boundary/PeriodicFieldBoundary.hpp"
 #include "engine/modules/boundary/PeriodicParticleBoundary.hpp"
 #include "engine/modules/deposit/Deposit.hpp"
+#include "engine/modules/diagnostics/CurrentDiagnostic.hpp"
 #include "engine/modules/diagnostics/CurrentVerifier.hpp"
+#include "engine/modules/diagnostics/EnergyDiagnostic.hpp"
 #include "engine/modules/diagnostics/EnergyVerifier.hpp"
 #include "engine/modules/field/YeeMaxwell.hpp"
 #include "engine/modules/gather/Gather.hpp"
-#include "engine/modules/injector/PlaneWaveLaserInjector.hpp"
+#include "engine/modules/injector/Injectors.hpp"
 #include "engine/modules/pusher/BorisPusher.hpp"
 #include "kernels/shapes/shape.hpp"
 
@@ -19,12 +21,6 @@
 #include <cmath>
 #include <iostream>
 #include <memory>
-
-struct CurrentMetrics
-{
-    double avg_jx{0.0};
-    double max_ampere_res{0.0};
-};
 
 // Applies initial ballistic drift velocity along X
 template <typename Engine>
@@ -63,47 +59,6 @@ void freeze_electric_field(Engine& eng, std::size_t grid_cells)
     }
 }
 
-// Computes total kinetic energy scaled by particle weighting
-template <typename Engine>
-double compute_kinetic_energy(const Engine& eng, float target_n0, std::size_t ppc)
-{
-    double       e_kin  = 0.0;
-    const double weight = static_cast<double>(target_n0) / static_cast<double>(ppc);
-
-    for (const auto& block : eng.particles())
-    {
-        for (std::size_t i = 0; i < block.activeCount; ++i)
-        {
-            const double px = block.momentum_x[i];
-            const double py = block.momentum_y[i];
-            const double pz = block.momentum_z[i];
-            const double m  = block.mass[i];
-            e_kin += 0.5 * (px * px + py * py + pz * pz) / m;
-        }
-    }
-    return e_kin * weight;
-}
-
-// Evaluates average current density and peak deviation against expected value
-template <typename Engine>
-CurrentMetrics compute_current_metrics(const Engine& eng, std::size_t grid_cells, double expected_current)
-{
-    double      sum_jx         = 0.0;
-    double      max_ampere_res = 0.0;
-    const auto& J              = eng.current();
-
-    for (std::size_t i = 0; i < grid_cells; ++i)
-    {
-        const float jx_curr = J.field_x(i);
-        sum_jx += static_cast<double>(jx_curr);
-
-        const double local_res = std::abs(static_cast<double>(jx_curr) - expected_current);
-        max_ampere_res         = std::max(max_ampere_res, local_res);
-    }
-
-    return {sum_jx / static_cast<double>(grid_cells), max_ampere_res};
-}
-
 int main()
 {
     constexpr std::size_t grid_cells = 256;
@@ -137,11 +92,14 @@ int main()
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
 
-    // 2. Diagnostic Verifiers Setup
+    // 2. Diagnostic Verifiers & Diagnostic Reducers Setup
     const double expected_current = (-1.0 * static_cast<double>(target_n0) * static_cast<double>(v_drift)) / dx;
 
     pico::diagnostics::EnergyVerifier  energy_verifier(/*drift_tolerance_pct=*/2.0);
     pico::diagnostics::CurrentVerifier current_verifier(expected_current, /*tolerance_pct=*/5.0);
+
+    using EnergyDiag  = pico::diagnostics::EnergyDiagnostic<EngineT>;
+    using CurrentDiag = pico::diagnostics::CurrentDiagnostic<EngineT>;
 
     // 3. Execution Loop
     PICApp app(std::move(wrapper), dt);
@@ -152,11 +110,12 @@ int main()
 
                 freeze_electric_field(eng, grid_cells);
 
-                const double e_kin = compute_kinetic_energy(eng, target_n0, ppc);
-                energy_verifier.record_step(/*e_field=*/0.0, e_kin);
+                // Standardized energy and current diagnostic reductions
+                const auto energy_m  = EnergyDiag::evaluate(eng);
+                const auto current_m = CurrentDiag::evaluate(eng, expected_current);
 
-                const auto [avg_jx, max_ampere_res] = compute_current_metrics(eng, grid_cells, expected_current);
-                current_verifier.record_step(avg_jx, max_ampere_res);
+                energy_verifier.record_step(energy_m.e_field_total(), energy_m.e_kin);
+                current_verifier.record_step(current_m.avg_jx, current_m.max_ampere_res);
             });
 
     // 4. Verification & Reporting

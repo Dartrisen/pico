@@ -7,6 +7,7 @@ cc_binary(
         "//app:app_lib",
         "//engine",
         "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
         "//app:ui_verification_report",
     ],
 )
@@ -18,6 +19,7 @@ cc_binary(
         "//app:app_lib",
         "//engine",
         "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
         "//app:ui_verification_report",
     ],
 )
@@ -29,6 +31,7 @@ cc_binary(
         "//app:app_lib",
         "//engine",
         "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
         "//app:ui_verification_report",
     ],
 )
@@ -40,6 +43,7 @@ cc_binary(
         "//app:app_lib",
         "//engine",
         "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
         "//app:ui_verification_report",
     ],
 )
@@ -51,6 +55,7 @@ cc_binary(
         "//app:app_lib",
         "//engine",
         "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
         "//app:ui_verification_report",
     ],
 )
@@ -62,6 +67,7 @@ cc_binary(
         "//app:app_lib",
         "//engine",
         "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
         "//app:ui_verification_report",
     ],
 )
