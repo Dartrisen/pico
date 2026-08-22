@@ -21,29 +21,28 @@
 #include <memory>
 #include <random>
 
-// Scrambles particle x-positions across blocks to introduce spatial cache misses
 template <typename Engine>
-void scramble_particle_positions(Engine& engine, double domain_length)
+void scramble_block_particles(Engine& engine, double dx, float range = 24.0f)
 {
     auto&                                 particles = engine.particles();
     std::mt19937                          rng(1337);
-    std::uniform_real_distribution<float> dist(0.0f, static_cast<float>(domain_length));
+    std::uniform_real_distribution<float> dist(-range * static_cast<float>(dx), range * static_cast<float>(dx));
 
     for (auto& block : particles)
     {
         for (std::size_t i = 0; i < block.activeCount; ++i)
         {
-            block.position_x[i] = dist(rng);
+            block.position_x[i] += dist(rng);
         }
     }
 }
 
 int main()
 {
-    constexpr std::size_t grid_cells = 2048;
+    constexpr std::size_t grid_cells = 131072;
     constexpr double      dx         = 0.05;
     constexpr double      dt         = 0.001;
-    constexpr std::size_t ppc        = 1000; // ~2.04M total particles
+    constexpr std::size_t ppc        = 64;
     constexpr std::size_t nsteps     = 100;
     constexpr std::size_t BS         = 64;
 
@@ -62,46 +61,64 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    // 1. Initialize Engine & Thermal Particles
-    EngineT engine_instance{grid, ppc};
-    auto&   particles = engine_instance.particles();
-    particles.init_positions_uniform(grid);
-    particles.init_velocities_thermal(/*v_th=*/2.0f, 0.0f, 0.0f, 0.0f, /*seed=*/42);
-
-    const double domain_length = grid.physical_size() * grid.cell_size();
-    scramble_particle_positions(engine_instance, domain_length);
-
-    auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
-    auto* concrete_wrapper = wrapper.get();
-
-    PICApp app(std::move(wrapper), dt);
-
-    // 2. Measure Execution on Unsorted (Scrambled) System via PICApp
-    const auto start_unsorted = std::chrono::high_resolution_clock::now();
-    app.run(nsteps);
-    const auto   end_unsorted = std::chrono::high_resolution_clock::now();
-    const double unsorted_ms  = std::chrono::duration<double, std::milli>(end_unsorted - start_unsorted).count();
-
-    // 3. Sort Block Particles using pico::modules::sorter::ParticleSorter Kernel
-    pico::modules::sorter::ParticleSorter<BS> sorter;
-    for (auto& block : concrete_wrapper->engine().particles())
+    // Factory function to guarantee identical Step 0 starting states
+    auto create_scrambled_engine = [&]()
     {
-        sorter.sort_block(block, grid);
+        EngineT engine{grid, ppc};
+        engine.set_locality_threshold(0.0);
+        engine.set_sort_frequency(0);
+
+        auto& particles = engine.particles();
+        particles.init_positions_uniform(grid);
+        particles.init_velocities_thermal(/*v_th=*/1.0f, 0.0f, 0.0f, 0.0f, /*seed=*/42);
+
+        scramble_block_particles(engine, dx, /*range=*/24.0f);
+        return engine;
+    };
+
+    // 1. Benchmark Unsorted Engine (Step 0 -> Step 100)
+    double unsorted_ms = 0.0;
+    {
+        EngineT engine_unsorted = create_scrambled_engine();
+        auto    wrapper         = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_unsorted));
+        PICApp  app(std::move(wrapper), dt);
+
+        const auto start = std::chrono::high_resolution_clock::now();
+        app.run(nsteps);
+        const auto end = std::chrono::high_resolution_clock::now();
+        unsorted_ms    = std::chrono::duration<double, std::milli>(end - start).count();
     }
 
-    // 4. Measure Execution on Sorted System via PICApp
-    const auto start_sorted = std::chrono::high_resolution_clock::now();
-    app.run(nsteps);
-    const auto   end_sorted = std::chrono::high_resolution_clock::now();
-    const double sorted_ms  = std::chrono::duration<double, std::milli>(end_sorted - start_sorted).count();
+    // 2. Benchmark Pre-Sorted Engine (Step 0 -> Step 100)
+    double      sorted_ms        = 0.0;
+    std::size_t active_particles = 0;
+    {
+        EngineT engine_sorted = create_scrambled_engine();
 
-    // 5. Verification Analysis & Reporting
+        pico::modules::sorter::ParticleSorter<BS> sorter;
+        for (auto& block : engine_sorted.particles())
+        {
+            sorter.sort_block(block, grid);
+        }
+
+        active_particles = engine_sorted.particles().active_particles();
+
+        auto   wrapper = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_sorted));
+        PICApp app(std::move(wrapper), dt);
+
+        const auto start = std::chrono::high_resolution_clock::now();
+        app.run(nsteps);
+        const auto end = std::chrono::high_resolution_clock::now();
+        sorted_ms      = std::chrono::duration<double, std::milli>(end - start).count();
+    }
+
+    // 3. Verification Analysis & Reporting
     pico::diagnostics::ParticleSortLocalityVerifier verifier(/*minimum_speedup=*/1.02);
     const auto                                      res = verifier.verify(unsorted_ms, sorted_ms);
 
     pico::ui::VerificationReport report("Particle Sort & Cache Locality Verification", res.passed);
 
-    report.add_row("Total Active Particles", std::to_string(concrete_wrapper->engine().particles().active_particles()));
+    report.add_row("Total Active Particles", std::to_string(active_particles));
     report.add_fixed_row("Unsorted Runtime", res.unsorted_time_ms, 2, "ms");
     report.add_fixed_row("Sorted Runtime", res.sorted_time_ms, 2, "ms");
     report.add_fixed_row("Locality Speedup", res.speedup, 3, "x");
