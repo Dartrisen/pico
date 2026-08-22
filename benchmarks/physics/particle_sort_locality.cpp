@@ -43,7 +43,7 @@ int main()
     constexpr double      dx         = 0.05;
     constexpr double      dt         = 0.001;
     constexpr std::size_t ppc        = 64;
-    constexpr std::size_t nsteps     = 100;
+    constexpr std::size_t nsteps     = 500;
     constexpr std::size_t BS         = 64;
 
     assert(dx > 0.95 * dt && "CFL condition violated.");
@@ -61,27 +61,34 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    // Factory function to guarantee identical Step 0 starting states
-    auto create_scrambled_engine = [&]()
+    auto create_engine = [&]()
     {
         EngineT engine{grid, ppc};
-        engine.set_locality_threshold(0.0);
-        engine.set_sort_frequency(0);
 
         auto& particles = engine.particles();
+
         particles.init_positions_uniform(grid);
-        particles.init_velocities_thermal(/*v_th=*/1.0f, 0.0f, 0.0f, 0.0f, /*seed=*/42);
+        particles.init_velocities_thermal(
+                /*v_th=*/0.001f, 0.0f, 0.0f, 0.0f,
+                /*seed=*/42);
 
         scramble_block_particles(engine, dx, /*range=*/24.0f);
+
         return engine;
     };
 
-    // 1. Benchmark Unsorted Engine (Step 0 -> Step 100)
+    // ------------------------------------------------------------
+    // 1. SORTING OFF
+    // ------------------------------------------------------------
     double unsorted_ms = 0.0;
     {
-        EngineT engine_unsorted = create_scrambled_engine();
-        auto    wrapper         = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_unsorted));
-        PICApp  app(std::move(wrapper), dt);
+        EngineT engine = create_engine();
+
+        engine.set_sort_frequency(0);
+        engine.set_locality_threshold(0.0);
+
+        auto   wrapper = std::make_unique<EngineWrapper<EngineT>>(std::move(engine));
+        PICApp app(std::move(wrapper), dt);
 
         const auto start = std::chrono::high_resolution_clock::now();
         app.run(nsteps);
@@ -89,21 +96,19 @@ int main()
         unsorted_ms    = std::chrono::duration<double, std::milli>(end - start).count();
     }
 
-    // 2. Benchmark Pre-Sorted Engine (Step 0 -> Step 100)
+    // ------------------------------------------------------------
+    // 2. GLOBAL SORTING ON
+    // ------------------------------------------------------------
     double      sorted_ms        = 0.0;
     std::size_t active_particles = 0;
     {
-        EngineT engine_sorted = create_scrambled_engine();
+        EngineT engine   = create_engine();
+        active_particles = engine.particles().active_particles();
 
-        pico::modules::sorter::ParticleSorter<BS> sorter;
-        for (auto& block : engine_sorted.particles())
-        {
-            sorter.sort_block(block, grid);
-        }
+        engine.set_sort_frequency(100);
+        engine.set_locality_threshold(0.0);
 
-        active_particles = engine_sorted.particles().active_particles();
-
-        auto   wrapper = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_sorted));
+        auto   wrapper = std::make_unique<EngineWrapper<EngineT>>(std::move(engine));
         PICApp app(std::move(wrapper), dt);
 
         const auto start = std::chrono::high_resolution_clock::now();

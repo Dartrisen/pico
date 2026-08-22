@@ -32,7 +32,7 @@ int main()
     constexpr double      dt         = 0.002;
     constexpr std::size_t ppc        = 4000;
     constexpr std::size_t nsteps     = 4000;
-    constexpr std::size_t BS         = 64;
+    constexpr std::size_t BS         = 256;
     constexpr float       target_n0  = 1.0f;
 
     constexpr float  v1   = 0.05f; // Velocity wave amplitude
