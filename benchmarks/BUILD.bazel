@@ -1,11 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_binary")
 
-cc_library(
-    name = "bench_core",
-    hdrs = glob(["core/*.hpp"]),
-    visibility = ["//bench:__subpackages__"],
-)
-
 cc_binary(
     name = "bench_boris_push",
     srcs = ["kernels/boris_push.cpp"],
@@ -56,18 +50,8 @@ cc_binary(
     name = "bench_simd_efficiency",
     srcs = ["simd/vectorization_efficiency.cpp"],
     deps = [
-        ":bench_core",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-cc_binary(
-    name = "bench_full_pic",
-    srcs = ["system/full_pic.cpp"],
-    deps = [
-        ":bench_core",
-        "//data",
-        "//kernels",
+        "//app:ui_verification_report",
+        "//engine/perf:profiler",
     ],
     visibility = ["//visibility:public"],
 )
