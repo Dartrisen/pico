@@ -8,7 +8,7 @@
 #include <cstring>
 #include <vector>
 
-namespace
+namespace benchmarks
 {
 
 /**
@@ -210,14 +210,14 @@ void bench_field_bandwidth()
     report.print();
 }
 
-} // namespace
+} // namespace benchmarks
 
 int main()
 {
-    bench_sequential_bandwidth();
-    bench_random_bandwidth();
-    bench_particle_bandwidth();
-    bench_field_bandwidth();
+    benchmarks::bench_sequential_bandwidth();
+    benchmarks::bench_random_bandwidth();
+    benchmarks::bench_particle_bandwidth();
+    benchmarks::bench_field_bandwidth();
 
     return 0;
 }

@@ -4,7 +4,7 @@
 #include <cmath>
 #include <vector>
 
-namespace
+namespace benchmarks
 {
 
 /**
@@ -287,14 +287,14 @@ void bench_flop_mix()
     report.print();
 }
 
-} // namespace
+} // namespace benchmarks
 
 int main()
 {
-    bench_instruction_parallelism();
-    bench_simd_access_patterns();
-    bench_branch_impact();
-    bench_flop_mix();
+    benchmarks::bench_instruction_parallelism();
+    benchmarks::bench_simd_access_patterns();
+    benchmarks::bench_branch_impact();
+    benchmarks::bench_flop_mix();
 
     return 0;
 }

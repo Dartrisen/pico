@@ -7,7 +7,7 @@
 #include <cmath>
 #include <vector>
 
-namespace
+namespace benchmarks
 {
 
 /**
@@ -164,13 +164,13 @@ void bench_stride_impact()
     report.print();
 }
 
-} // namespace
+} // namespace benchmarks
 
 int main()
 {
-    bench_cache_scaling();
-    bench_field_block_size_scaling();
-    bench_stride_impact();
+    benchmarks::bench_cache_scaling();
+    benchmarks::bench_field_block_size_scaling();
+    benchmarks::bench_stride_impact();
 
     return 0;
 }
