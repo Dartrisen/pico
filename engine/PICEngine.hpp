@@ -10,7 +10,6 @@
 #include "engine/modules/concepts.hpp"
 #include "engine/modules/injector/Injectors.hpp"
 #include "engine/modules/sorter/ParticleSorter.hpp"
-#include "engine/perf/CycleClock.hpp"
 #include "engine/perf/LocalityProfiler.hpp"
 #include "engine/perf/PipelineProfiler.hpp"
 

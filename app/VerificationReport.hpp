@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Colors.hpp"
+
 #include <iomanip>
 #include <iostream>
 #include <sstream>

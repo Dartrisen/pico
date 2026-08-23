@@ -36,9 +36,9 @@ int main()
     constexpr float       target_n0  = 1.0f;
 
     // Temperature Anisotropy: Transverse thermal velocities much higher than longitudinal (Ty, Tz >> Tx)
-    constexpr double v_th_x = 0.05;
-    constexpr double v_th_y = 0.40;
-    constexpr double v_th_z = 0.40;
+    constexpr double v_th_x = 0.01;
+    constexpr double v_th_y = 0.15;
+    constexpr double v_th_z = 0.15;
 
     assert(dx > 0.95 * dt && "CFL condition violated.");
 
