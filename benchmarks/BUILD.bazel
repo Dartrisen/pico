@@ -10,9 +10,10 @@ cc_binary(
     name = "bench_boris_push",
     srcs = ["kernels/boris_push.cpp"],
     deps = [
-        ":bench_core",
         "//data",
         "//kernels",
+        "//app:ui_verification_report",
+        "//engine/perf:profiler",
     ],
     visibility = ["//visibility:public"],
 )
@@ -21,9 +22,10 @@ cc_binary(
     name = "bench_field_interp",
     srcs = ["kernels/field_interp.cpp"],
     deps = [
-        ":bench_core",
         "//data",
         "//kernels",
+        "//app:ui_verification_report",
+        "//engine/perf:profiler",
     ],
     visibility = ["//visibility:public"],
 )
@@ -32,8 +34,9 @@ cc_binary(
     name = "bench_bandwidth",
     srcs = ["memory/bandwidth.cpp"],
     deps = [
-        ":bench_core",
         "//data",
+        "//app:ui_verification_report",
+        "//engine/perf:profiler",
     ],
     visibility = ["//visibility:public"],
 )
@@ -42,8 +45,9 @@ cc_binary(
     name = "bench_cache_scaling",
     srcs = ["memory/cache_scaling.cpp"],
     deps = [
-        ":bench_core",
         "//data",
+        "//app:ui_verification_report",
+        "//engine/perf:profiler",
     ],
     visibility = ["//visibility:public"],
 )
