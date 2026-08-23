@@ -9,157 +9,108 @@ class RelativisticBorisPusherTest : public ::testing::Test
 {
 protected:
     static constexpr size_t BS = 32;
+
+    particle::ParticleBlock<BS> create_particle(float px, float py, float pz, float x = 0.0f, float m = 1.0f, float q = 1.0f)
+    {
+        particle::ParticleBlock<BS> block{};
+        block.activeCount   = 1;
+        block.mass[0]       = m;
+        block.charge[0]     = q;
+        block.momentum_x[0] = px;
+        block.momentum_y[0] = py;
+        block.momentum_z[0] = pz;
+        block.position_x[0] = x;
+        return block;
+    }
+
+    FieldScratch<BS> create_field(float ex, float ey, float ez, float bx, float by, float bz)
+    {
+        FieldScratch<BS> scratch{};
+        for (size_t i = 0; i < BS; ++i)
+        {
+            scratch.Ex[i] = ex;
+            scratch.Ey[i] = ey;
+            scratch.Ez[i] = ez;
+            scratch.Bx[i] = bx;
+            scratch.By[i] = by;
+            scratch.Bz[i] = bz;
+        }
+        return scratch;
+    }
+
+    void simulate(particle::ParticleBlock<BS>& block, FieldScratch<BS>& scratch, float dt, int steps)
+    {
+        for (int i = 0; i < steps; ++i)
+        {
+            kernels::pusher::RelativisticBorisPusher<BS>::push_block(block, scratch, dt);
+        }
+    }
+
+    float get_kinetic_energy(const particle::ParticleBlock<BS>& block)
+    {
+        const float px    = block.momentum_x[0];
+        const float py    = block.momentum_y[0];
+        const float pz    = block.momentum_z[0];
+        const float m     = block.mass[0];
+        const float gamma = std::sqrt(1.0f + (px * px + py * py + pz * pz) / (m * m));
+        return (gamma - 1.0f) * m;
+    }
 };
 
 TEST_F(RelativisticBorisPusherTest, VelocityCappingUnderContinuousAcceleration)
 {
-    particle::ParticleBlock<BS> block{};
-    block.activeCount = 1;
+    auto block   = create_particle(0.1f, 0.0f, 0.0f);
+    auto scratch = create_field(50.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
 
-    block.mass[0]       = 1.0f;
-    block.charge[0]     = 1.0f;
-    block.momentum_x[0] = 0.1f;
-    block.momentum_y[0] = 0.0f;
-    block.momentum_z[0] = 0.0f;
-    block.position_x[0] = 0.0f;
+    simulate(block, scratch, 0.05f, 200);
 
-    FieldScratch<BS> scratch{};
-    // Apply a massive and continuous electric field to push past classical limits
-    scratch.Ex[0] = 50.0f;
-    scratch.Ey[0] = 0.0f;
-    scratch.Ez[0] = 0.0f;
-    scratch.Bx[0] = 0.0f;
-    scratch.By[0] = 0.0f;
-    scratch.Bz[0] = 0.0f;
-
-    const float dt = 0.05f;
-    const float c  = 1.0f;
-
-    // Simulate over 200 steps
-    for (int step = 0; step < 200; ++step)
-    {
-        kernels::pusher::RelativisticBorisPusher<BS>::push_block(block, scratch, dt);
-    }
-
-    // Extract final velocity: v = p / (gamma * m)
-    const float px = block.momentum_x[0];
-    const float py = block.momentum_y[0];
-    const float pz = block.momentum_z[0];
-    const float m  = block.mass[0];
-
-    const float p_sq  = px * px + py * py + pz * pz;
-    const float gamma = std::sqrt(1.0f + p_sq / (m * m));
+    const float px    = block.momentum_x[0];
+    const float py    = block.momentum_y[0];
+    const float pz    = block.momentum_z[0];
+    const float m     = block.mass[0];
+    const float gamma = std::sqrt(1.0f + (px * px + py * py + pz * pz) / (m * m));
     const float vx    = px / (gamma * m);
 
-    // Velocity must strictly remain bounded below c
-    EXPECT_LT(vx, c);
-    // With heavy acceleration, it should push close to the speed of light limit
+    EXPECT_LT(vx, 1.0f);
     EXPECT_GT(vx, 0.95f);
 }
 
 TEST_F(RelativisticBorisPusherTest, ZeroFieldMomentumConservation)
 {
-    particle::ParticleBlock<BS> block{};
-    block.activeCount = 1;
+    auto block   = create_particle(0.6f, 0.3f, -0.2f, 2.0f);
+    auto scratch = create_field(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
 
-    block.mass[0]       = 1.0f;
-    block.charge[0]     = 1.0f;
-    block.momentum_x[0] = 0.6f;
-    block.momentum_y[0] = 0.3f;
-    block.momentum_z[0] = -0.2f;
-    block.position_x[0] = 2.0f;
+    const float init_px = block.momentum_x[0];
+    const float init_py = block.momentum_y[0];
+    const float init_pz = block.momentum_z[0];
+    const float init_x  = block.position_x[0];
+    const float dt      = 0.02f;
 
-    FieldScratch<BS> scratch{};
-    // Zero out all fields
-    for (size_t i = 0; i < BS; ++i)
-    {
-        scratch.Ex[i] = 0.0f;
-        scratch.Ey[i] = 0.0f;
-        scratch.Ez[i] = 0.0f;
-        scratch.Bx[i] = 0.0f;
-        scratch.By[i] = 0.0f;
-        scratch.Bz[i] = 0.0f;
-    }
+    simulate(block, scratch, dt, 1);
 
-    const float initial_px = block.momentum_x[0];
-    const float initial_py = block.momentum_y[0];
-    const float initial_pz = block.momentum_z[0];
-    const float initial_x  = block.position_x[0];
-    const float dt         = 0.02f;
+    EXPECT_NEAR(block.momentum_x[0], init_px, 1e-6f);
+    EXPECT_NEAR(block.momentum_y[0], init_py, 1e-6f);
+    EXPECT_NEAR(block.momentum_z[0], init_pz, 1e-6f);
 
-    kernels::pusher::RelativisticBorisPusher<BS>::push_block(block, scratch, dt);
-
-    // Momentum must be completely unchanged in zero fields
-    EXPECT_NEAR(block.momentum_x[0], initial_px, 1e-6f);
-    EXPECT_NEAR(block.momentum_y[0], initial_py, 1e-6f);
-    EXPECT_NEAR(block.momentum_z[0], initial_pz, 1e-6f);
-
-    // Check position progression matches relativistic free-streaming: x += dt * (p / (gamma * m))
-    const float p_sq       = initial_px * initial_px + initial_py * initial_py + initial_pz * initial_pz;
-    const float gamma      = std::sqrt(1.0f + p_sq / (block.mass[0] * block.mass[0]));
-    const float expected_x = initial_x + dt * initial_px / (gamma * block.mass[0]);
+    const float gamma      = std::sqrt(1.0f + (init_px * init_px + init_py * init_py + init_pz * init_pz) / (block.mass[0] * block.mass[0]));
+    const float expected_x = init_x + dt * init_px / (gamma * block.mass[0]);
 
     EXPECT_NEAR(block.position_x[0], expected_x, 1e-6f);
 }
 
 TEST_F(RelativisticBorisPusherTest, EnergyConservationAfterFieldRemoval)
 {
-    particle::ParticleBlock<BS> block{};
-    block.activeCount = 1;
-
-    block.mass[0]       = 1.0f;
-    block.charge[0]     = 1.0f;
-    block.momentum_x[0] = 0.2f;
-    block.momentum_y[0] = 0.1f;
-    block.momentum_z[0] = 0.0f;
-    block.position_x[0] = 0.0f;
-
-    FieldScratch<BS> scratch{};
-    // Phase 1: Active electromagnetic field
-    scratch.Ex[0] = 2.0f;
-    scratch.Ey[0] = 1.0f;
-    scratch.Ez[0] = 0.0f;
-    scratch.Bx[0] = 0.0f;
-    scratch.By[0] = 0.0f;
-    scratch.Bz[0] = 1.5f;
+    auto block          = create_particle(0.2f, 0.1f, 0.0f);
+    auto active_scratch = create_field(2.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.5f);
+    auto zero_scratch   = create_field(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
 
     const float dt = 0.02f;
 
-    // Push while the field is active (particle accelerates/moves)
-    for (int step = 0; step < 50; ++step)
-    {
-        kernels::pusher::RelativisticBorisPusher<BS>::push_block(block, scratch, dt);
-    }
+    simulate(block, active_scratch, dt, 50);
+    const float energy_before = get_kinetic_energy(block);
 
-    // Helper lambda to calculate relativistic kinetic energy: E_k = (gamma - 1) * m
-    auto get_kinetic_energy = [](const particle::ParticleBlock<BS>& b, float m_val)
-    {
-        const float px    = b.momentum_x[0];
-        const float py    = b.momentum_y[0];
-        const float pz    = b.momentum_z[0];
-        const float p_sq  = px * px + py * py + pz * pz;
-        const float gamma = std::sqrt(1.0f + p_sq / (m_val * m_val));
-        return (gamma - 1.0f) * m_val;
-    };
+    simulate(block, zero_scratch, dt, 50);
+    const float energy_after = get_kinetic_energy(block);
 
-    const float energy_before = get_kinetic_energy(block, block.mass[0]);
-
-    // Phase 2: Turn off the field completely (field is gone)
-    scratch.Ex[0] = 0.0f;
-    scratch.Ey[0] = 0.0f;
-    scratch.Ez[0] = 0.0f;
-    scratch.Bx[0] = 0.0f;
-    scratch.By[0] = 0.0f;
-    scratch.Bz[0] = 0.0f;
-
-    // Push further with zero field (particle free-streams)
-    for (int step = 0; step < 50; ++step)
-    {
-        kernels::pusher::RelativisticBorisPusher<BS>::push_block(block, scratch, dt);
-    }
-
-    const float energy_after = get_kinetic_energy(block, block.mass[0]);
-
-    // Kinetic energy must be locked and perfectly conserved after the field is removed
     EXPECT_NEAR(energy_before, energy_after, 1e-5f);
 }
