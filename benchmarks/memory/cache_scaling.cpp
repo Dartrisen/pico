@@ -51,17 +51,9 @@ void bench_cache_scaling()
         double operations       = static_cast<double>(num_floats) * iterations;
         double giga_ops_per_sec = (operations / elapsed_sec) / 1e9;
 
-        const char* cache_level = "?";
-        if (kb <= 32)
-            cache_level = "L1";
-        else if (kb <= 256)
-            cache_level = "L2";
-        else if (kb <= 8192)
-            cache_level = "L3";
-        else
-            cache_level = "RAM";
+        const char* working_set = kb <= 32 ? "small" : kb <= 256 ? "medium" : kb <= 8192 ? "large" : "DRAM-scale";
 
-        std::string label = "Size: " + std::to_string(kb) + " KB [" + cache_level + "]";
+        std::string label = "Size: " + std::to_string(kb) + " KB [" + working_set + "]";
         report.add_fixed_row(label, giga_ops_per_sec, 2, "Gops/s");
     }
 

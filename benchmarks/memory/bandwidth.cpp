@@ -77,7 +77,8 @@ void bench_random_bandwidth()
             data[i]    = static_cast<float>(i);
             indices[i] = i;
         }
-        std::random_shuffle(indices.begin(), indices.end());
+        std::mt19937 rng(42);
+        std::shuffle(indices.begin(), indices.end(), rng);
 
         // Warmup
         float sum = 0.0f;
