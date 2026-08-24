@@ -15,8 +15,11 @@ kernel void relativistic_boris_push(
     device const float* By             [[buffer(10)]],
     device const float* Bz             [[buffer(11)]],
     constant float&     dt             [[buffer(12)]],
+    constant uint&      active_count   [[buffer(13)]],
     uint                p              [[thread_position_in_grid]])
 {
+    if (p >= active_count)
+        return;
     const float half_dt   = 0.5f * dt;
     const float q         = charge[p];
     const float m         = mass[p];

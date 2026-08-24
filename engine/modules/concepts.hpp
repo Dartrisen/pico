@@ -27,10 +27,9 @@ concept Collision = requires(T c, Particles& p, double dt) {
 
 // Gather concept: map grid fields onto particles
 template <class T, class ParticleBlock, class EMFields, class FieldScratch>
-concept Gather =
-        requires(T g, const ParticleBlock& block, const EMFields& fields, const Grid& grid, FieldScratch& scratch) {
-            { g.gather_block(block, fields, grid, scratch) } -> std::same_as<void>;
-        };
+concept Gather = requires(T g, const ParticleBlock& block, const EMFields& fields, const Grid& grid, FieldScratch& scratch) {
+    { g.gather_block(block, fields, grid, scratch) } -> std::same_as<void>;
+};
 
 // Current / charge deposition concept
 template <class T, class Block, class FieldSystem>
@@ -47,6 +46,11 @@ concept FieldBoundary = requires(B b, FieldsT& fields, SystemT& system, const Gr
 template <class B, class BlockT>
 concept ParticleBoundary = requires(B b, BlockT& block, const Grid& grid) {
     { b.apply(block, grid) } -> std::same_as<void>;
+};
+
+template <typename T>
+concept AsyncPusher = requires(T& pusher) {
+    { pusher.sync() } -> std::same_as<void>;
 };
 
 } // namespace pico::modules
