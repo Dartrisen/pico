@@ -30,7 +30,7 @@ int main()
     constexpr double      dt         = 0.001;
     constexpr std::size_t ppc        = 1000;
     constexpr std::size_t nsteps     = 1000;
-    constexpr std::size_t BS         = 64;
+    constexpr std::size_t BS         = 8192;
     constexpr float       target_n0  = 2.0f;
 
     assert(dx > 0.95 * dt && "CFL condition violated.");
@@ -40,7 +40,7 @@ int main()
     // Order-3 Cubic Spline Shape (4-point stencil) for maximum math load
     using Shape     = kernels::shapes::SplineShape<3>;
     using Field     = pico::modules::field::YeeMaxwell<BS>;
-    using Push      = pico::modules::pusher::BorisPusher<BS>;
+    using Push      = pico::modules::pusher::MetalBorisPusher<BS>;
     using Gather    = pico::modules::gather::Gather<Shape, BS>;
     using Dep       = pico::modules::deposit::SimpleDeposit<Shape, BS>;
     using BoundaryF = pico::modules::boundary::PeriodicBoundaryFieldHandler<BS>;

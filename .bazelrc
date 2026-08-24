@@ -14,6 +14,14 @@ build --host_cxxopt=-std=c++20
 
 
 # ============================================================
+# Xcode / Metal Toolchain Environment
+# ============================================================
+
+build --action_env=DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+build --repo_env=DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+
+
+# ============================================================
 # Release / performance
 # ============================================================
 

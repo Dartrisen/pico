@@ -1,15 +1,38 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
+genrule(
+    name = "boris_metal",
+    srcs = ["metal/boris.metal"],
+    outs = ["boris.metallib"],
+    cmd = """
+        xcrun -sdk macosx metal -c $(SRCS) -o $(@D)/boris.air
+        xcrun -sdk macosx metallib $(@D)/boris.air -o $@
+    """,
+)
+
 cc_library(
     name = "pusher",
+    srcs = [
+        "metal_boris.cpp",
+    ],
     hdrs = [
         "boris.hpp",
+        "metal_boris.hpp",
         "relativistic_boris.hpp",
     ],
-    deps = [
-        "@openmp//:openmp",
-        "//data/field:field",
-        "//data/particle:particle",
+    data = [
+        ":boris_metal",
+    ],
+    linkopts = [
+        "-framework", "Metal",
+        # "-framework", "Foundation",
     ],
     visibility = ["//visibility:public"],
+    deps = [
+        "//data/field",
+        "//data/particle",
+        "@metal_cpp//:metal_cpp",
+        "@openmp",
+        "@rules_cc//cc/runfiles",
+    ],
 )
