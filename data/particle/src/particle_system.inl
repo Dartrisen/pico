@@ -144,17 +144,13 @@ void ParticleSystem<BLOCK_SIZE>::init_density_profile(const Grid& grid, DensityF
     if (activeParticles_ == 0)
         return;
 
-    const double domain_length = grid.physical_size() * grid.cell_size();
-    const double dx_p          = domain_length / static_cast<double>(activeParticles_);
-    size_t       global_idx    = 0;
-
     for (size_t b = 0; b < numBlocks_; ++b)
     {
         auto& block = blocks_[b];
-        for (size_t i = 0; i < block.activeCount; ++i, ++global_idx)
+        for (size_t i = 0; i < block.activeCount; ++i)
         {
-            const double x0      = (static_cast<double>(global_idx) + 0.5) * dx_p;
-            const float  local_n = static_cast<float>(density_fn(x0));
+            // Evaluate density fn at the particle's actual position
+            const float local_n = static_cast<float>(density_fn(block.position_x[i]));
 
             block.charge[i] = base_charge * local_n;
             block.mass[i]   = base_mass * local_n;
