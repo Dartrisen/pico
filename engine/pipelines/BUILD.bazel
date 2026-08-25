@@ -1,0 +1,14 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "pipelines",
+    hdrs = [
+        "Pipelines.hpp",
+    ],
+    deps = [
+        "@openmp//:openmp",
+        "//data:data",
+        "//engine/perf:profiler",
+    ],
+    visibility = ["//visibility:public"],
+)

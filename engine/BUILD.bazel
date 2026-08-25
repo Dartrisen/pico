@@ -17,6 +17,7 @@ cc_library(
         "//engine/modules/boundary",
         "//engine/modules/injector",
         "//engine/modules/sorter",
+        "//engine/pipelines:pipelines",
         "//engine/perf:profiler",
     ],
     visibility = ["//visibility:public"],

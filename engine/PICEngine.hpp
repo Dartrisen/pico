@@ -12,6 +12,7 @@
 #include "engine/modules/sorter/ParticleSorter.hpp"
 #include "engine/perf/LocalityProfiler.hpp"
 #include "engine/perf/PipelineProfiler.hpp"
+#include "engine/pipelines/Pipelines.hpp"
 
 #include <cstdint>
 #include <omp.h>
@@ -104,17 +105,24 @@ public:
         current_.zero_out();
         ensure_thread_buffers(grid);
 
-        // Compile-time dispatch based on Pusher capabilities
-        if constexpr (pico::modules::AsyncPusher<PusherT>)
-        {
-            advance_staged_gpu(grid, dt);
-        }
-        else
-        {
-            advance_fused_cpu(grid, dt);
-        }
+        // Group transient step arguments
+        pico::pipeline::PipelineContext<BLOCK_SIZE> ctx{.particles          = particles_,
+                                                        .fields             = fields_,
+                                                        .thread_currents    = thread_currents_,
+                                                        .thread_scratch     = thread_scratch_,
+                                                        .thread_metrics     = thread_metrics_,
+                                                        .grid               = grid,
+                                                        .dt                 = dt,
+                                                        .particles_per_cell = particles_per_cell_,
+                                                        .profiler           = profiler_,
+                                                        .enable_profiling   = enable_stage_profiling_,
+                                                        .enable_locality    = enable_locality_diagnostics_};
 
-        // Accumulate thread-local currents into global current grid
+        // Compile-time dispatch
+        using Pipeline = std::conditional_t<pico::modules::AsyncPusher<PusherT>, pico::pipeline::GpuStagedPipeline, pico::pipeline::CpuFusedPipeline>;
+
+        Pipeline::execute(ctx, gather_, pusher_, particle_boundary_, deposit_);
+
         for (const auto& tc : thread_currents_)
         {
             current_.accumulate(tc);
@@ -231,104 +239,6 @@ private:
                 thread_scratch_.emplace_back();
                 thread_metrics_.emplace_back();
             }
-        }
-    }
-
-    // CPU pushers
-    void advance_fused_cpu(const Grid& grid, double dt)
-    {
-        // clang-format off
-        #pragma omp parallel
-        // clang-format on
-        {
-            const int tid            = omp_get_thread_num();
-            auto&     thread_current = thread_currents_[tid];
-            auto&     thread_scratch = thread_scratch_[tid];
-            auto&     thread_metrics = thread_metrics_[tid];
-
-            thread_current.zero_out();
-            thread_metrics.reset();
-
-            // clang-format off
-            #pragma omp for schedule(static)
-            // clang-format on
-            for (auto& block : particles_)
-            {
-                step_particle_block_fused(block, thread_scratch, thread_current, thread_metrics, grid, dt);
-            }
-        }
-    }
-
-    // GPU pushers
-    void advance_staged_gpu(const Grid& grid, double dt)
-    {
-        for (auto& tc : thread_currents_)
-            tc.zero_out();
-        for (auto& tm : thread_metrics_)
-            tm.reset();
-
-        // clang-format off
-        #pragma omp parallel
-        // clang-format on
-        {
-            const int tid            = omp_get_thread_num();
-            auto&     thread_scratch = thread_scratch_[tid];
-            // clang-format off
-            #pragma omp for schedule(static)
-            // clang-format on
-            for (auto& block : particles_)
-            {
-                gather_.gather_block(block, fields_, grid, thread_scratch);
-                pusher_.push_block(block, thread_scratch, dt);
-            }
-        }
-
-        execute_stage(pico::perf::Stage::Pusher, [&] { pusher_.sync(); });
-        // clang-format off
-        #pragma omp parallel
-        // clang-format on
-        {
-            const int tid            = omp_get_thread_num();
-            auto&     thread_current = thread_currents_[tid];
-            auto&     thread_metrics = thread_metrics_[tid];
-            // clang-format off
-            #pragma omp for schedule(static)
-            // clang-format on
-            for (auto& block : particles_)
-            {
-                particle_boundary_.apply(block, grid);
-                deposit_.deposit_block(block, thread_current, grid, dt, particles_per_cell_);
-
-                if (enable_locality_diagnostics_)
-                {
-                    pico::diagnostics::LocalityProfiler<particle::ParticleBlock<BLOCK_SIZE>>::process_block(block, grid, thread_metrics);
-                }
-            }
-        }
-    }
-
-    void step_particle_block_fused(auto& block, auto& scratch, auto& current, auto& thread_metrics, const Grid& grid, double dt)
-    {
-        const uint64_t t0 = enable_stage_profiling_ ? pico::perf::read_cpu_ticks() : 0;
-        gather_.gather_block(block, fields_, grid, scratch);
-
-        const uint64_t t1 = enable_stage_profiling_ ? pico::perf::read_cpu_ticks() : 0;
-        pusher_.push_block(block, scratch, dt);
-        particle_boundary_.apply(block, grid);
-
-        const uint64_t t2 = enable_stage_profiling_ ? pico::perf::read_cpu_ticks() : 0;
-        deposit_.deposit_block(block, current, grid, dt, particles_per_cell_);
-
-        if (enable_stage_profiling_)
-        {
-            const uint64_t t3 = pico::perf::read_cpu_ticks();
-            profiler_.add_ticks(pico::perf::Stage::Gather, t1 - t0);
-            profiler_.add_ticks(pico::perf::Stage::Pusher, t2 - t1);
-            profiler_.add_ticks(pico::perf::Stage::Deposit, t3 - t2);
-        }
-        if (enable_locality_diagnostics_)
-        {
-            pico::diagnostics::LocalityProfiler<particle::ParticleBlock<BLOCK_SIZE>>::process_block(block, grid, thread_metrics);
         }
     }
 
