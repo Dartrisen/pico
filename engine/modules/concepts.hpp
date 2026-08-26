@@ -1,4 +1,5 @@
 #pragma once
+
 #include "data/field/include/field_em.hpp"
 #include "data/particle/include/particle_system.hpp"
 
@@ -15,8 +16,8 @@ concept FieldSolver = requires(T s, EMFields& f, FieldSystem& J, double dt) {
 
 // Particle pusher concept
 template <class T, class ParticleBlock, class FieldsScratch>
-concept Pusher = requires(T p, ParticleBlock& block, const FieldsScratch& f, double dt) {
-    { p.push_block(block, f, dt) } -> std::same_as<void>;
+concept Pusher = requires(T p, ParticleBlock& block, const FieldsScratch& f, float dt, float q_over_m) {
+    { p.push_block(block, f, dt, q_over_m) } -> std::same_as<void>;
 };
 
 // Collision model concept
@@ -27,15 +28,14 @@ concept Collision = requires(T c, Particles& p, double dt) {
 
 // Gather concept: map grid fields onto particles
 template <class T, class ParticleBlock, class EMFields, class FieldScratch>
-concept Gather =
-        requires(T g, const ParticleBlock& block, const EMFields& fields, const Grid& grid, FieldScratch& scratch) {
-            { g.gather_block(block, fields, grid, scratch) } -> std::same_as<void>;
-        };
+concept Gather = requires(T g, const ParticleBlock& block, const EMFields& fields, const Grid& grid, FieldScratch& scratch) {
+    { g.gather_block(block, fields, grid, scratch) } -> std::same_as<void>;
+};
 
 // Current / charge deposition concept
 template <class T, class Block, class FieldSystem>
-concept Deposit = requires(T d, const Block& block, FieldSystem& current, const Grid& grid, double dt, uint32_t n_ppc) {
-    { d.deposit_block(block, current, grid, dt, n_ppc) } -> std::same_as<void>;
+concept Deposit = requires(T d, const Block& block, FieldSystem& current, const Grid& grid, float dt, float ppc, float base_charge, float base_mass) {
+    { d.deposit_block(block, current, grid, dt, ppc, base_charge, base_mass) } -> std::same_as<void>;
 };
 
 template <class B, class FieldsT, class SystemT>
