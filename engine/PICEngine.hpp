@@ -390,6 +390,11 @@ public:
         return current_;
     }
 
+    [[nodiscard]] const FieldInjectorT& injector() const noexcept
+    {
+        return field_injector_;
+    }
+
 private:
     template <typename StageFunc>
     void execute_stage(pico::perf::Stage stage, StageFunc&& func)

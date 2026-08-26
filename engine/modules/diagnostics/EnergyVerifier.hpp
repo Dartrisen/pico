@@ -13,6 +13,7 @@ struct EnergyVerificationResult
     bool   passed{false};
     double initial_energy{0.0};
     double final_energy{0.0};
+    double final_injected_energy{0.0};
     double max_energy_drift_pct{0.0};
     double avg_energy_drift_pct{0.0};
 };
@@ -22,15 +23,16 @@ class EnergyVerifier
 public:
     explicit EnergyVerifier(double drift_tolerance_pct = 2.0) : drift_tolerance_pct_(drift_tolerance_pct) {}
 
-    void record_step(double field_energy, double kinetic_energy)
+    /// Backwards-compatible step recorder
+    void record_step(double field_energy, double kinetic_energy, double injected_energy = 0.0)
     {
-        const double total = field_energy + kinetic_energy;
         field_energies_.push_back(field_energy);
         kinetic_energies_.push_back(kinetic_energy);
-        total_energies_.push_back(total);
+        injected_energies_.push_back(injected_energy);
+        total_energies_.push_back(field_energy + kinetic_energy);
     }
 
-    EnergyVerificationResult verify() const
+    [[nodiscard]] EnergyVerificationResult verify() const
     {
         EnergyVerificationResult res;
         if (total_energies_.empty())
@@ -38,21 +40,24 @@ public:
             return res;
         }
 
-        res.initial_energy = total_energies_.front();
-        res.final_energy   = total_energies_.back();
+        res.initial_energy        = total_energies_.front();
+        res.final_energy          = total_energies_.back();
+        res.final_injected_energy = injected_energies_.back();
 
-        const double e0 = res.initial_energy;
-        if (std::abs(e0) < 1e-12)
+        const double e0        = res.initial_energy;
+        double       max_drift = 0.0;
+        double       sum_drift = 0.0;
+
+        for (std::size_t i = 0; i < total_energies_.size(); ++i)
         {
-            return res;
-        }
+            const double e_current  = total_energies_[i];
+            const double e_injected = injected_energies_[i];
+            const double e_expected = e0 + e_injected;
 
-        double max_drift = 0.0;
-        double sum_drift = 0.0;
+            if (std::abs(e_expected) < 1e-12)
+                continue;
 
-        for (double e : total_energies_)
-        {
-            const double drift = (std::abs(e - e0) / e0) * 100.0;
+            const double drift = (std::abs(e_current - e_expected) / e_expected) * 100.0;
             max_drift          = std::max(max_drift, drift);
             sum_drift += drift;
         }
@@ -64,10 +69,28 @@ public:
         return res;
     }
 
+    [[nodiscard]] const std::vector<double>& field_energies() const noexcept
+    {
+        return field_energies_;
+    }
+    [[nodiscard]] const std::vector<double>& kinetic_energies() const noexcept
+    {
+        return kinetic_energies_;
+    }
+    [[nodiscard]] const std::vector<double>& injected_energies() const noexcept
+    {
+        return injected_energies_;
+    }
+    [[nodiscard]] const std::vector<double>& total_energies() const noexcept
+    {
+        return total_energies_;
+    }
+
 private:
     double              drift_tolerance_pct_;
     std::vector<double> field_energies_;
     std::vector<double> kinetic_energies_;
+    std::vector<double> injected_energies_;
     std::vector<double> total_energies_;
 };
 
