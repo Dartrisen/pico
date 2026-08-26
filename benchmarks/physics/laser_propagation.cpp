@@ -56,7 +56,7 @@ int main()
 
     // 1. Initialize Laser Engine & Boundary Conditions
     Injector laser_injector(inject_cell, a0, tau, t_peak);
-    EngineT  engine_instance{grid, /*ppc=*/0, BoundaryF{}, BoundaryP{}, std::move(laser_injector), /*n0=*/0.0f};
+    EngineT  engine_instance{grid, BoundaryF{}, BoundaryP{}, std::move(laser_injector)};
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();

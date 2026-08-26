@@ -37,12 +37,12 @@ int main()
     constexpr double plasma_len_si = 100.0e-6;
     constexpr double vacuum_gap_si = 15.0e-6;
     constexpr double trail_gap_si  = 15.0e-6;
-    constexpr float  n_peak_nc     = 0.5f;
+    constexpr float  n_peak_nc     = 0.25f;
 
     // Thermal velocities
-    constexpr float v_th_e = 0.01f;
+    constexpr float v_th_e = 0.05f;
     constexpr float mp_me  = 1836.0f;
-    constexpr float v_th_p = v_th_e / std::sqrt(mp_me);
+    const float     v_th_p = v_th_e / std::sqrt(mp_me);
 
     // Code length dimensions
     constexpr double x_start  = vacuum_gap_si / unit_len;
@@ -51,18 +51,18 @@ int main()
     constexpr double L_domain = (vacuum_gap_si + plasma_len_si + trail_gap_si) / unit_len;
 
     // Laser Pulse Parameters
-    constexpr float       laser_a0     = 0.0f; // Set > 0 to enable laser injection
+    constexpr float       laser_a0     = 0.05f; // Set > 0 to enable laser injection
     constexpr float       tau_duration = 30.0f;
     constexpr float       t_peak       = 75.0f;
     constexpr std::size_t inject_cell  = 0;
 
     // Grid Setup
-    constexpr std::size_t cells_per_lambda = 4 * 16;
+    constexpr std::size_t cells_per_lambda = 128;
     constexpr double      dx               = (2.0 * std::numbers::pi) / static_cast<double>(cells_per_lambda);
-    constexpr double      dt               = 0.95 * dx;
+    constexpr double      dt               = 0.90 * dx;
     const std::size_t     grid_cells       = static_cast<std::size_t>(std::ceil(L_domain / dx));
 
-    constexpr std::size_t ppc    = 100;
+    constexpr std::size_t ppc    = 10;
     constexpr std::size_t nsteps = 4000;
     constexpr std::size_t BS     = 64;
 
@@ -76,11 +76,11 @@ int main()
 
     Grid grid(grid_cells, dx, /*guards=*/4);
 
-    using Shape     = kernels::shapes::Shape<1>;
+    using Shape     = kernels::shapes::Shape<3>;
     using Field     = pico::modules::field::YeeMaxwell<BS>;
-    using Push      = pico::modules::pusher::BorisPusher<BS>;
+    using Push      = pico::modules::pusher::RelativisticBorisPusher<BS>;
     using Gather    = pico::modules::gather::Gather<Shape, BS>;
-    using Dep       = pico::modules::deposit::SimpleDeposit<Shape, BS>;
+    using Dep       = pico::modules::deposit::OptEsirkepovDeposit<Shape, BS>;
     using BoundaryF = pico::modules::boundary::PeriodicBoundaryFieldHandler<BS>;
     using BoundaryP = pico::modules::boundary::PeriodicBoundaryParticleHandler<BS>;
     using Injector  = pico::modules::injector::PlaneWaveLaserInjector<BS>;
@@ -100,6 +100,7 @@ int main()
 
     // Construct Engine without default single species
     EngineT engine_instance{grid, BoundaryF{}, BoundaryP{}, std::move(laser_injector)};
+    engine_instance.set_sort_frequency(10);
 
     // Add Species 0: Thermal Electrons (q = -1.0, m = 1.0)
     engine_instance.add_species_thermal(ppc, plasma_ramp, v_th_e,
@@ -113,7 +114,7 @@ int main()
                                         /*base_charge=*/1.0f,
                                         /*base_mass=*/mp_me,
                                         /*vx_drift=*/0.0f, /*vy_drift=*/0.0f, /*vz_drift=*/0.0f,
-                                        /*seed=*/4200u);
+                                        /*seed=*/1337u);
 
     const std::size_t total_particles = grid.physical_size() * ppc * engine_instance.num_species();
 

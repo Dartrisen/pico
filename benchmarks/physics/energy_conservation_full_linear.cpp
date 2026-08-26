@@ -38,7 +38,7 @@ int main()
 
     // Thermal velocities (v_th_e = 0.035 ensures lambda_D >= 0.3 * dx for finite grid stability)
     constexpr float mass_ratio  = 1836.0f;
-    constexpr float v_thermal_e = 0.035f;
+    constexpr float v_thermal_e = 0.05f;
     const float     v_thermal_p = v_thermal_e / std::sqrt(mass_ratio);
 
     // Code length dimensions
@@ -48,13 +48,13 @@ int main()
     constexpr double L_domain = (vacuum_gap_si + plasma_len_si + trail_gap_si) / unit_len;
 
     // Grid Setup
-    constexpr std::size_t cells_per_lambda = 128; // 64 cells per lambda_0
+    constexpr std::size_t cells_per_lambda = 128; // cells per lambda_0
     constexpr double      dx               = (2.0 * std::numbers::pi) / static_cast<double>(cells_per_lambda);
     constexpr double      dt               = 0.95 * dx;
     const std::size_t     grid_cells       = static_cast<std::size_t>(std::ceil(L_domain / dx));
 
     constexpr std::size_t ppc    = 10;
-    constexpr std::size_t nsteps = 1000;
+    constexpr std::size_t nsteps = 50000;
     constexpr std::size_t BS     = 64;
 
     // 3. Debye Length & Stability Assertions
@@ -69,7 +69,7 @@ int main()
 
     using Shape     = kernels::shapes::Shape<3>;
     using Field     = pico::modules::field::YeeMaxwell<BS>;
-    using Push      = pico::modules::pusher::BorisPusher<BS>;
+    using Push      = pico::modules::pusher::RelativisticBorisPusher<BS>;
     using Gather    = pico::modules::gather::Gather<Shape, BS>;
     using Dep       = pico::modules::deposit::OptEsirkepovDeposit<Shape, BS>;
     using BoundaryF = pico::modules::boundary::PeriodicBoundaryFieldHandler<BS>;
@@ -80,6 +80,7 @@ int main()
 
     // 4. Engine Initialization & Bounded Linear Density Setup
     EngineT engine_instance{grid};
+    engine_instance.set_locality_threshold(1.0);
 
     constexpr double ramp_buffer = 5.0e-6 / unit_len;
     const double     x_ramp_in   = x_start + ramp_buffer;
