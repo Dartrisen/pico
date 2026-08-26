@@ -46,27 +46,27 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    // 1. Initialize Engine & Setup Native Particle Wave Perturbation
-    EngineT engine_instance{grid, ppc, target_n0};
+    // 1. Initialize Engine safely without single-species assumptions
+    EngineT engine_instance{grid};
 
     const double    L  = static_cast<double>(grid_cells) * dx;
     const double    k  = 2.0 * std::numbers::pi / L;
     constexpr float v0 = 0.05f;
 
-    auto& particles = engine_instance.particles();
-    particles.init_positions_uniform(grid);
-    particles.init_velocities_wave(v0, k);
+    // 2. Register Species & Apply Wave Velocity Perturbation
+    auto& species = engine_instance.add_species_uniform(ppc, target_n0);
+    species.init_velocities_wave(v0, k);
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
 
-    // 2. Setup Verification & Diagnostics
+    // 3. Setup Verification & Diagnostics
     pico::diagnostics::PlasmaWaveVerifier verifier(dt, dx, ppc, target_n0);
     using EnergyDiag = pico::diagnostics::EnergyDiagnostic<EngineT>;
 
     PICApp app(std::move(wrapper), dt);
 
-    // 3. Execution Loop
+    // 4. Execution Loop
     app.run(nsteps,
             [&](int /*step*/)
             {
@@ -75,7 +75,7 @@ int main()
                 verifier.record_step(m.e_ex, m.e_total());
             });
 
-    // 4. Verification Analysis & Reporting
+    // 5. Verification Analysis & Reporting
     const auto res = verifier.verify(/*drift_tol=*/2.0, /*freq_tol=*/5.0);
 
     std::ostringstream title_ss;

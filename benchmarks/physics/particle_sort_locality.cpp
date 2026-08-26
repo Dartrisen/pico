@@ -21,14 +21,13 @@
 #include <memory>
 #include <random>
 
-template <typename Engine>
-void scramble_block_particles(Engine& engine, double dx, float range = 24.0f)
+template <typename ParticleSystem>
+void scramble_block_particles(ParticleSystem& species, double dx, float range = 24.0f)
 {
-    auto&                                 particles = engine.particles();
     std::mt19937                          rng(1337);
     std::uniform_real_distribution<float> dist(-range * static_cast<float>(dx), range * static_cast<float>(dx));
 
-    for (auto& block : particles)
+    for (auto& block : species)
     {
         for (std::size_t i = 0; i < block.activeCount; ++i)
         {
@@ -61,18 +60,21 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    auto create_engine = [&]()
+    auto create_engine = [&grid]()
     {
-        EngineT engine{grid, ppc};
+        EngineT engine{grid};
 
-        auto& particles = engine.particles();
+        auto& species = engine.add_species_thermal(ppc,
+                                                   /*v_th=*/0.001f,
+                                                   /*n0=*/1.0f,
+                                                   /*base_charge=*/-1.0f,
+                                                   /*base_mass=*/1.0f,
+                                                   /*vx_drift=*/0.0f,
+                                                   /*vy_drift=*/0.0f,
+                                                   /*vz_drift=*/0.0f,
+                                                   /*seed=*/42);
 
-        particles.init_positions_uniform(grid);
-        particles.init_velocities_thermal(
-                /*v_th=*/0.001f, 0.0f, 0.0f, 0.0f,
-                /*seed=*/42);
-
-        scramble_block_particles(engine, dx, /*range=*/24.0f);
+        scramble_block_particles(species, dx, /*range=*/24.0f);
 
         return engine;
     };
@@ -103,7 +105,7 @@ int main()
     std::size_t active_particles = 0;
     {
         EngineT engine   = create_engine();
-        active_particles = engine.particles().active_particles();
+        active_particles = engine.total_particles();
 
         engine.set_sort_frequency(100);
         engine.set_locality_threshold(0.0);

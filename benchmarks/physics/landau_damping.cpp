@@ -34,7 +34,7 @@ int main()
     constexpr std::size_t ppc        = 1000;
     constexpr std::size_t nsteps     = 4000;
     constexpr std::size_t BS         = 256;
-    constexpr float       target_n0  = 1.0f;
+    constexpr float       target_n0  = 0.5f;
 
     constexpr float  v1   = 0.08f; // Scaled wave perturbation to remain above noise floor at 1000 PPC
     constexpr double v_th = 4.0;   // Thermal velocity for k*lambda_D ~ 0.31
@@ -54,15 +54,18 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    // 1. Initialize Engine & Native Thermal State
-    EngineT engine_instance{grid, ppc, target_n0};
+    // 1. Initialize Engine cleanly without implicit species
+    EngineT engine_instance{grid};
 
     const double L = static_cast<double>(grid_cells) * dx;
     const double k = 2.0 * std::numbers::pi / L;
 
-    auto& particles = engine_instance.particles();
-    particles.init_positions_uniform(grid);
-    particles.init_velocities_thermal(v_th, [&](double x) { return std::tuple{v1 * std::sin(static_cast<float>(k * x)), 0.0f, 0.0f}; }, 42);
+    // 2. Add thermal species using built-in profile initialization
+    engine_instance.add_species_thermal_profile(
+            ppc, [](double) { return target_n0; }, static_cast<float>(v_th), [k](double x) { return std::tuple{v1 * std::sin(static_cast<float>(k * x)), 0.0f, 0.0f}; },
+            /*base_charge=*/-1.0f,
+            /*base_mass=*/1.0f,
+            /*seed=*/42);
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
@@ -72,7 +75,7 @@ int main()
 
     PICApp app(std::move(wrapper), dt);
 
-    // 2. Execution & Wall-Clock Benchmark Loop
+    // 3. Execution & Wall-Clock Benchmark Loop
     const auto start_wall_time = std::chrono::high_resolution_clock::now();
 
     app.run(nsteps,
@@ -85,13 +88,13 @@ int main()
     const auto   end_wall_time = std::chrono::high_resolution_clock::now();
     const double total_sec     = std::chrono::duration<double>(end_wall_time - start_wall_time).count();
 
-    // 3. Physical Verification & Performance Metrics
+    // 4. Physical Verification & Performance Metrics
     const auto res = verifier.verify(/*energy_drift_tol_pct=*/2.0, /*freq_tol_pct=*/5.0, /*gamma_tol_pct=*/15.0);
 
-    const std::size_t total_particles = concrete_wrapper->engine().particles().active_particles();
+    const std::size_t total_particles = concrete_wrapper->engine().total_particles();
     const double      mup_s           = ((static_cast<double>(total_particles) * nsteps) / total_sec) / 1e6;
 
-    // 4. Output Summary Report
+    // 5. Output Summary Report
     std::ostringstream title_ss;
     title_ss << "Landau Damping Verification (k = " << std::fixed << std::setprecision(3) << k << ")";
 

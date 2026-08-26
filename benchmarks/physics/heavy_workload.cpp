@@ -49,16 +49,16 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    // 1. Initialize Engine & Native Wave Perturbation
-    EngineT engine_instance{grid, ppc, target_n0};
+    // 1. Construct Engine safely without implicit species instantiation
+    EngineT engine_instance{grid};
 
     const double    L  = static_cast<double>(grid_cells) * dx;
     const double    k  = 2.0 * std::numbers::pi / L;
     constexpr float v0 = 0.05f;
 
-    auto& particles = engine_instance.particles();
-    particles.init_positions_uniform(grid);
-    particles.init_velocities_wave(v0, k, /*longitudinal_only=*/true);
+    // 2. Register Species & Apply Wave Perturbation directly to reference
+    auto& species = engine_instance.add_species_uniform(ppc, target_n0);
+    species.init_velocities_wave(v0, k, /*longitudinal_only=*/true);
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
@@ -68,7 +68,7 @@ int main()
 
     PICApp app(std::move(wrapper), dt);
 
-    // 2. Main Execution & Wall-Clock Benchmark Loop
+    // 3. Main Execution & Wall-Clock Benchmark Loop
     const auto start_wall_time = std::chrono::high_resolution_clock::now();
 
     app.run(nsteps,
@@ -81,13 +81,13 @@ int main()
     const auto   end_wall_time = std::chrono::high_resolution_clock::now();
     const double total_sec     = std::chrono::duration<double>(end_wall_time - start_wall_time).count();
 
-    // 3. Performance Metrics & Verification
+    // 4. Performance Metrics & Verification
     const auto res = verifier.verify(/*energy_drift_tol_pct=*/2.0, /*freq_tol_pct=*/5.0);
 
-    const std::size_t total_particles = concrete_wrapper->engine().particles().active_particles();
+    const std::size_t total_particles = concrete_wrapper->engine().total_particles();
     const double      mup_s           = ((static_cast<double>(total_particles) * nsteps) / total_sec) / 1e6;
 
-    // 4. Reporting
+    // 5. Reporting
     std::ostringstream title_ss;
     title_ss << "Heavy Workload & Physics Report (n0 = " << std::fixed << std::setprecision(1) << target_n0 << ")";
 

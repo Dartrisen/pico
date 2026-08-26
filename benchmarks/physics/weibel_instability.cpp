@@ -30,15 +30,15 @@ int main()
     constexpr std::size_t grid_cells = 256;
     constexpr double      dx         = 0.2;
     constexpr double      dt         = 0.05;
-    constexpr std::size_t ppc        = 500;
+    constexpr std::size_t ppc        = 100;
     constexpr std::size_t nsteps     = 2000;
     constexpr std::size_t BS         = 256;
     constexpr float       target_n0  = 1.0f;
 
     // Temperature Anisotropy: Transverse thermal velocities much higher than longitudinal (Ty, Tz >> Tx)
-    constexpr double v_th_x = 0.01;
-    constexpr double v_th_y = 0.15;
-    constexpr double v_th_z = 0.15;
+    constexpr double v_th_x = 0.05;
+    constexpr double v_th_y = 0.1;
+    constexpr double v_th_z = 0.1;
 
     assert(dt <= 0.95 * dx && "CFL condition violated.");
 
@@ -55,15 +55,15 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    // 1. Initialize Engine & Anisotropic Thermal State
-    EngineT engine_instance{grid, ppc, target_n0};
+    // 1. Construct Engine safely without implicit species instantiation
+    EngineT engine_instance{grid};
 
     const double L = static_cast<double>(grid_cells) * dx;
     const double k = 2.0 * std::numbers::pi / L;
 
-    auto& particles = engine_instance.particles();
-    particles.init_positions_uniform(grid);
-    particles.init_velocities_thermal(v_th_x, v_th_y, v_th_z, 0.0f, 0.0f, 0.0f, /*seed=*/42);
+    // 2. Register Species & Apply Anisotropic Thermal State directly to reference
+    auto& species = engine_instance.add_species_uniform(ppc, target_n0);
+    species.init_velocities_thermal(v_th_x, v_th_y, v_th_z, 0.0f, 0.0f, 0.0f, /*seed=*/42);
 
     // Seed a tiny magnetic field perturbation B_z(x) = B0 * cos(k * x) to kickstart linear growth
     const float       B0     = 1e-4f;
@@ -84,7 +84,7 @@ int main()
 
     PICApp app(std::move(wrapper), dt);
 
-    // 2. Execution & Benchmark Loop
+    // 3. Execution & Benchmark Loop
     const auto start_wall_time = std::chrono::high_resolution_clock::now();
 
     app.run(nsteps,
@@ -97,13 +97,13 @@ int main()
     const auto   end_wall_time = std::chrono::high_resolution_clock::now();
     const double total_sec     = std::chrono::duration<double>(end_wall_time - start_wall_time).count();
 
-    // 3. Physical Verification & Performance Metrics
+    // 4. Physical Verification & Performance Metrics
     const auto res = verifier.verify(/*energy_drift_tol_pct=*/5.0, /*gamma_tol_pct=*/35.0);
 
-    const std::size_t total_particles = concrete_wrapper->engine().particles().active_particles();
+    const std::size_t total_particles = concrete_wrapper->engine().total_particles();
     const double      mup_s           = ((static_cast<double>(total_particles) * nsteps) / total_sec) / 1e6;
 
-    // 4. Output Summary Report via your VerificationReport framework
+    // 5. Output Summary Report via VerificationReport framework
     std::ostringstream title_ss;
     title_ss << "Weibel Instability (Anisotropy Ty/Tx = " << std::fixed << std::setprecision(1) << (v_th_y / v_th_x) << ")";
 
