@@ -34,7 +34,7 @@
  */
 template <class FieldSolverT, class GatherT, class PusherT, class DepositT, class FieldBoundaryT, class ParticleBoundaryT,
           class FieldInjectorT = pico::modules::injector::NoInjector<64>, std::size_t BLOCK_SIZE = 64>
-    requires pico::modules::FieldSolver<FieldSolverT, EMFields<BLOCK_SIZE>, FieldSystem<BLOCK_SIZE>> &&
+    requires pico::modules::FieldSolver<FieldSolverT, EMFields<BLOCK_SIZE>, FieldSystem<BLOCK_SIZE>, FieldBoundaryT> &&
              pico::modules::Gather<GatherT, particle::ParticleBlock<BLOCK_SIZE>, EMFields<BLOCK_SIZE>, FieldScratch<BLOCK_SIZE>> &&
              pico::modules::Pusher<PusherT, particle::ParticleBlock<BLOCK_SIZE>, FieldScratch<BLOCK_SIZE>> &&
              pico::modules::Deposit<DepositT, particle::ParticleBlock<BLOCK_SIZE>, FieldSystem<BLOCK_SIZE>> &&
@@ -283,7 +283,7 @@ public:
         execute_stage(pico::perf::Stage::FieldSolver,
                       [&]
                       {
-                          field_solver_.solve(fields_, current_, dt);
+                          field_solver_.solve(fields_, current_, field_boundary_, dt);
                           field_injector_.inject(fields_, current_time, dt);
                       });
 
@@ -313,14 +313,17 @@ public:
     {
         enable_stage_profiling_ = enable;
     }
+
     void enable_locality_diagnostics(bool enable) noexcept
     {
         enable_locality_diagnostics_ = enable;
     }
+
     void set_sort_frequency(std::size_t frequency) noexcept
     {
         sort_frequency_ = frequency;
     }
+
     void set_locality_threshold(double max_stride) noexcept
     {
         locality_threshold_ = max_stride;
@@ -330,10 +333,12 @@ public:
     {
         return locality_metrics_.mean_stride();
     }
+
     [[nodiscard]] const pico::diagnostics::LocalityMetrics& locality_metrics() const noexcept
     {
         return locality_metrics_;
     }
+
     [[nodiscard]] const pico::perf::PipelineProfiler& profiler() const noexcept
     {
         return profiler_;
@@ -345,39 +350,41 @@ public:
         step_counter_ = 0;
     }
 
-    [[nodiscard]] ParticleSystemType& particles(std::size_t idx = 0)
-    {
-        return species_.at(idx);
-    }
-    [[nodiscard]] const ParticleSystemType& particles(std::size_t idx = 0) const
-    {
-        return species_.at(idx);
-    }
     [[nodiscard]] const std::vector<ParticleSystemType>& species() const noexcept
     {
         return species_;
     }
+
     [[nodiscard]] std::size_t num_species() const noexcept
     {
         return species_.size();
     }
-    [[nodiscard]] std::size_t particles_per_cell(std::size_t species_idx = 0) const
+
+    [[nodiscard]] std::size_t total_particles() const noexcept
     {
-        return species_ppc_.at(species_idx);
+        std::size_t total = 0;
+        for (const auto& sp : species_)
+        {
+            total += sp.active_particles();
+        }
+        return total;
     }
 
     [[nodiscard]] EMFields<BLOCK_SIZE>& fields() noexcept
     {
         return fields_;
     }
+
     [[nodiscard]] const EMFields<BLOCK_SIZE>& fields() const noexcept
     {
         return fields_;
     }
+
     [[nodiscard]] FieldSystem<BLOCK_SIZE>& current() noexcept
     {
         return current_;
     }
+
     [[nodiscard]] const FieldSystem<BLOCK_SIZE>& current() const noexcept
     {
         return current_;

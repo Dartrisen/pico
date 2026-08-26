@@ -17,7 +17,7 @@ public:
 
     std::size_t total_particles() const override
     {
-        return engine_.particles().active_particles();
+        return engine_.total_particles();
     }
 
     std::size_t grid_cells() const override

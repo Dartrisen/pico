@@ -8,10 +8,9 @@
 namespace pico::modules
 {
 
-// Field solver concept
-template <class T, class EMFields, class FieldSystem>
-concept FieldSolver = requires(T s, EMFields& f, FieldSystem& J, double dt) {
-    { s.solve(f, J, dt) } -> std::same_as<void>;
+template <class T, class EMFields, class FieldSystem, class FieldBoundary>
+concept FieldSolver = requires(T s, EMFields& f, FieldSystem& J, FieldBoundary& b, double dt) {
+    { s.solve(f, J, b, dt) } -> std::same_as<void>;
 };
 
 // Particle pusher concept
