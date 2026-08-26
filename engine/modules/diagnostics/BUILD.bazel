@@ -6,6 +6,7 @@ cc_library(
         "EnergyDiagnostic.hpp",
         "FieldEnvelopeDiagnostic.hpp",
         "CurrentDiagnostic.hpp",
+        "ConsoleVisualiser.hpp",
     ],
     visibility = ["//visibility:public"],
 )
