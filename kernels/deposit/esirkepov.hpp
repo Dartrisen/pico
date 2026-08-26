@@ -13,7 +13,7 @@ namespace kernels::deposit
 template <class Shape, std::size_t BLOCK_SIZE>
 struct EsirkepovDeposit
 {
-    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc)
+    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc, float base_charge, float base_mass)
     {
         constexpr int S = Shape::S;
 
@@ -23,13 +23,14 @@ struct EsirkepovDeposit
         const float  scale_factor = (1.0f / ppc) * inv_dx;
         const int    guards       = static_cast<int>(grid.guard_cells());
         const double max_x        = (static_cast<double>(grid.physical_size()) - 1e-7) * dx;
+        const float  inv_m        = 1.0f / base_mass;
 
         for (std::size_t p = 0; p < pb.activeCount; ++p)
         {
-            const float  inv_m = 1.0f / pb.mass[p];
-            const double vx    = static_cast<double>(pb.momentum_x[p] * inv_m);
-            const double x2    = std::clamp(static_cast<double>(pb.position_x[p]), 0.0, max_x);
-            const double x1    = std::clamp(x2 - vx * static_cast<double>(dt), 0.0, max_x);
+            const float  q_p = pb.weight[p] * base_charge;
+            const double vx  = static_cast<double>(pb.momentum_x[p] * inv_m);
+            const double x2  = std::clamp(static_cast<double>(pb.position_x[p]), 0.0, max_x);
+            const double x1  = std::clamp(x2 - vx * static_cast<double>(dt), 0.0, max_x);
 
             int    i0_1 = 0, i0_2 = 0;
             double w1[S]{}, w2[S]{};
@@ -39,7 +40,7 @@ struct EsirkepovDeposit
             const int min_node = std::min(i0_1, i0_2);
             const int max_node = std::max(i0_1, i0_2) + S - 1;
 
-            const float j_scale          = pb.charge[p] * (1.0f / ppc) * inv_dt;
+            const float j_scale          = q_p * (1.0f / ppc) * inv_dt;
             double      accumulated_flux = 0.0;
 
             for (int node = min_node; node < max_node; ++node)
@@ -57,7 +58,7 @@ struct EsirkepovDeposit
                 }
             }
 
-            const float q_factor = pb.charge[p] * scale_factor;
+            const float q_factor = q_p * scale_factor;
             const float qvy      = q_factor * (pb.momentum_y[p] * inv_m);
             const float qvz      = q_factor * (pb.momentum_z[p] * inv_m);
 
@@ -79,7 +80,7 @@ struct EsirkepovDeposit
 template <class Shape, std::size_t BLOCK_SIZE>
 struct FastEsirkepovDeposit
 {
-    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc)
+    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc, float base_charge, float base_mass)
     {
         constexpr int S = Shape::S;
 
@@ -89,11 +90,12 @@ struct FastEsirkepovDeposit
         const double j_scale      = (1.0 / static_cast<double>(ppc)) / static_cast<double>(dt);
         const int    guards       = static_cast<int>(grid.guard_cells());
         const double max_x        = (static_cast<double>(grid.physical_size()) - 1e-7) * dx;
+        const double inv_m        = 1.0 / static_cast<double>(base_mass);
 
         for (std::size_t p = 0; p < pb.activeCount; ++p)
         {
-            const double inv_m = 1.0 / static_cast<double>(pb.mass[p]);
-            const double vx    = static_cast<double>(pb.momentum_x[p]) * inv_m;
+            const float  q_p = pb.weight[p] * base_charge;
+            const double vx  = static_cast<double>(pb.momentum_x[p]) * inv_m;
 
             const double x2 = std::clamp(static_cast<double>(pb.position_x[p]), 0.0, max_x);
             const double x1 = std::clamp(x2 - vx * static_cast<double>(dt), 0.0, max_x);
@@ -117,7 +119,7 @@ struct FastEsirkepovDeposit
                 dw[off2 + s] += w2[s];
             }
 
-            const float q_jscale = pb.charge[p] * static_cast<float>(j_scale);
+            const float q_jscale = q_p * static_cast<float>(j_scale);
             double      flux     = 0.0;
 
             for (int k = 0; k < num_faces; ++k)
@@ -127,7 +129,7 @@ struct FastEsirkepovDeposit
                 J.field_x(idx_half) += static_cast<float>(flux) * q_jscale;
             }
 
-            const float q_factor = pb.charge[p] * static_cast<float>(scale_factor);
+            const float q_factor = q_p * static_cast<float>(scale_factor);
             const float qvy      = q_factor * static_cast<float>(pb.momentum_y[p] * inv_m);
             const float qvz      = q_factor * static_cast<float>(pb.momentum_z[p] * inv_m);
 
@@ -152,7 +154,7 @@ struct FastEsirkepovDeposit
 template <class Shape, std::size_t BLOCK_SIZE>
 struct OptEsirkepovDeposit
 {
-    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc)
+    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc, float base_charge, float base_mass)
     {
         constexpr int S = Shape::S;
 
@@ -162,11 +164,12 @@ struct OptEsirkepovDeposit
         const float j_scale      = (1.0f / ppc) / dt;
         const int   guards       = static_cast<int>(grid.guard_cells());
         const float max_x        = static_cast<float>((grid.physical_size() - 1e-7) * grid.cell_size());
+        const float inv_m        = 1.0f / base_mass;
 
         for (std::size_t p = 0; p < pb.activeCount; ++p)
         {
-            const float inv_m = 1.0f / pb.mass[p];
-            const float vx    = pb.momentum_x[p] * inv_m;
+            const float q_p = pb.weight[p] * base_charge;
+            const float vx  = pb.momentum_x[p] * inv_m;
 
             const double x2 = std::clamp(static_cast<double>(pb.position_x[p]), 0.0, static_cast<double>(max_x));
             const double x1 = std::clamp(x2 - static_cast<double>(vx * dt), 0.0, static_cast<double>(max_x));
@@ -177,7 +180,7 @@ struct OptEsirkepovDeposit
             Shape::weights(x1, static_cast<double>(dx), i0_1, w1_d);
             Shape::weights(x2, static_cast<double>(dx), i0_2, w2_d);
 
-            const float q_jscale = pb.charge[p] * j_scale;
+            const float q_jscale = q_p * j_scale;
             const int   delta_i  = i0_2 - i0_1;
 
             // --- 1. Fast-Path: Particle stayed in same grid cell (delta_i == 0) ---
@@ -218,7 +221,7 @@ struct OptEsirkepovDeposit
                 }
             }
 
-            const float q_factor = pb.charge[p] * scale_factor;
+            const float q_factor = q_p * scale_factor;
             const float qvy      = q_factor * (pb.momentum_y[p] * inv_m);
             const float qvz      = q_factor * (pb.momentum_z[p] * inv_m);
 

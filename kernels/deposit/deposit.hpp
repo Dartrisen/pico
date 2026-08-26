@@ -13,25 +13,31 @@ namespace kernels::deposit
 template <class Shape, std::size_t BLOCK_SIZE>
 struct CurrentDeposit
 {
-    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc)
+    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc, float base_charge, float base_mass = 1.0f)
     {
         constexpr int S = Shape::S;
 
-        const double dx           = grid.cell_size();
-        const float  inv_dx       = static_cast<float>(1.0 / dx);
-        const float  scale_factor = (1.0f / ppc) * inv_dx;
-        const int    guards       = static_cast<int>(grid.guard_cells());
-        const double max_x        = (static_cast<double>(grid.physical_size()) - 1e-7) * dx;
+        const double dx     = grid.cell_size();
+        const float  inv_dx = static_cast<float>(1.0 / dx);
+
+        // Pre-compute overall scaling factor outside the particle loop:
+        // (base_charge / (base_mass * ppc * dx))
+        const float base_scale = (base_charge / (base_mass * ppc)) * inv_dx;
+
+        const int    guards = static_cast<int>(grid.guard_cells());
+        const double max_x  = (static_cast<double>(grid.physical_size()) - 1e-7) * dx;
 
         for (std::size_t p = 0; p < pb.activeCount; ++p)
         {
-            const double x        = std::clamp(static_cast<double>(pb.position_x[p]), 0.0, max_x);
-            const float  inv_m    = 1.0f / pb.mass[p];
-            const float  q_factor = pb.charge[p] * scale_factor;
+            const double x = std::clamp(static_cast<double>(pb.position_x[p]), 0.0, max_x);
 
-            const float qvx = q_factor * (pb.momentum_x[p] * inv_m);
-            const float qvy = q_factor * (pb.momentum_y[p] * inv_m);
-            const float qvz = q_factor * (pb.momentum_z[p] * inv_m);
+            // Scaled charge for this specific particle: q_i = weight_i * base_scale
+            const float q_factor = pb.weight[p] * base_scale;
+
+            // Velocity components (v = p / m_0) scaled by q_i
+            const float qvx = q_factor * pb.momentum_x[p];
+            const float qvy = q_factor * pb.momentum_y[p];
+            const float qvz = q_factor * pb.momentum_z[p];
 
             int    i0_node = 0, i0_half = 0;
             double w_node_d[S]{}, w_half_d[S]{};

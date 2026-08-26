@@ -9,23 +9,20 @@ namespace kernels::pusher
 template <size_t BLOCK_SIZE>
 struct BorisPusher
 {
-    static void push_block(particle::ParticleBlock<BLOCK_SIZE>& pb, const FieldScratch<BLOCK_SIZE>& fs, float dt)
+    static void push_block(particle::ParticleBlock<BLOCK_SIZE>& pb, const FieldScratch<BLOCK_SIZE>& fs, float dt, float q_over_m)
     {
-        const float half_dt = 0.5f * dt;
+        // Pre-calculate rotation & impulse factor once for the entire block pass
+        const float half_qm_dt = 0.5f * q_over_m * dt;
+
         // clang-format off
         #pragma omp simd
         // clang-format on
         for (size_t p = 0; p < pb.activeCount; ++p)
         {
-            const float q          = pb.charge[p];
-            const float inv_m      = 1.0f / pb.mass[p];
-            const float half_q_dt  = half_dt * q;       // Impulse factor (q * dt / 2)
-            const float half_qm_dt = half_q_dt * inv_m; // Rotation factor (q * dt / 2m)
-
             // --- half electric kick ---
-            float px = pb.momentum_x[p] + half_q_dt * fs.Ex[p];
-            float py = pb.momentum_y[p] + half_q_dt * fs.Ey[p];
-            float pz = pb.momentum_z[p] + half_q_dt * fs.Ez[p];
+            float px = pb.momentum_x[p] + half_qm_dt * fs.Ex[p];
+            float py = pb.momentum_y[p] + half_qm_dt * fs.Ey[p];
+            float pz = pb.momentum_z[p] + half_qm_dt * fs.Ez[p];
 
             // --- magnetic rotation ---
             float tx = half_qm_dt * fs.Bx[p];
@@ -48,17 +45,17 @@ struct BorisPusher
             pz += (pxp * sy - pyp * sx);
 
             // --- half electric kick ---
-            px += half_q_dt * fs.Ex[p];
-            py += half_q_dt * fs.Ey[p];
-            pz += half_q_dt * fs.Ez[p];
+            px += half_qm_dt * fs.Ex[p];
+            py += half_qm_dt * fs.Ey[p];
+            pz += half_qm_dt * fs.Ez[p];
 
-            // Write back updated momentum
+            // Write back updated momentum/velocity
             pb.momentum_x[p] = px;
             pb.momentum_y[p] = py;
             pb.momentum_z[p] = pz;
 
-            // --- position update (v = p / m) ---
-            pb.position_x[p] += dt * px * inv_m;
+            // --- position update (v = px) ---
+            pb.position_x[p] += static_cast<double>(dt * px);
         }
     }
 };

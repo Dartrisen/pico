@@ -31,10 +31,8 @@ struct alignas(64) ParticleBlock
     std::array<float, BLOCK_SIZE> momentum_y;
     std::array<float, BLOCK_SIZE> momentum_z;
 
-    // --- Particle properties ---
+    // --- Particle Weight (w_i) ---
     std::array<float, BLOCK_SIZE> weight;
-    std::array<float, BLOCK_SIZE> mass;
-    std::array<float, BLOCK_SIZE> charge;
 
     uint32_t activeCount{0};
     uint32_t blockId{0};
@@ -75,8 +73,6 @@ struct alignas(64) ParticleBlock
         momentum_y[index] = momentum_y[last];
         momentum_z[index] = momentum_z[last];
         weight[index]     = weight[last];
-        mass[index]       = mass[last];
-        charge[index]     = charge[last];
     }
 
     template <MomentumComp C>

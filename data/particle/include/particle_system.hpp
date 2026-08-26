@@ -13,13 +13,6 @@
 
 constexpr size_t CACHE_LINE = 64;
 
-enum ParticleValue
-{
-    mass   = 1,
-    charge = -1,
-    weight = 1
-};
-
 namespace particle
 {
 
@@ -28,8 +21,7 @@ class ParticleSystem
 {
 public:
     // ---- Constructors & Destructor ----
-    explicit ParticleSystem(size_t maxParticles);
-    ParticleSystem(size_t maxParticles, float charge, float mass);
+    explicit ParticleSystem(size_t maxParticles, float charge = -1.0f, float mass = 1.0f);
     ~ParticleSystem();
 
     ParticleSystem(const ParticleSystem&)            = delete;
@@ -37,11 +29,24 @@ public:
     ParticleSystem(ParticleSystem&&) noexcept;
     ParticleSystem& operator=(ParticleSystem&&) noexcept;
 
-    // ---- Accessors & Iterators ----
+    // ---- Accessors ----
     size_t                  active_particles() const;
     static constexpr size_t block_size();
     size_t                  max_particles() const;
     size_t                  num_blocks() const;
+
+    float base_charge() const noexcept
+    {
+        return base_charge_;
+    }
+    float base_mass() const noexcept
+    {
+        return base_mass_;
+    }
+    float q_over_m() const noexcept
+    {
+        return base_charge_ / base_mass_;
+    }
 
     auto begin() noexcept
     {
@@ -61,10 +66,10 @@ public:
     }
 
     // ---- Density Initializers ----
-    void init_density_constant(float n0 = 1.0f, float base_charge = -1.0f, float base_mass = 1.0f);
+    void init_density_constant(float n0 = 1.0f);
 
     template <typename DensityFunc>
-    void init_density_profile(const Grid& grid, DensityFunc&& density_fn, float base_charge = -1.0f, float base_mass = 1.0f);
+    void init_density_profile(const Grid& grid, DensityFunc&& density_fn);
 
     // ---- Position Initializers ----
     void init_positions_uniform(double domain_length);
@@ -90,12 +95,14 @@ public:
 
     // ---- Mutators & Modifiers ----
     void set_active(size_t n);
-    void set_block_value(particle::ParticleBlock<BLOCK_SIZE>& block, ParticleValue value);
 
 private:
     size_t maxParticles_{0};
     size_t numBlocks_{0};
     size_t activeParticles_{0};
+
+    float base_charge_{-1.0f};
+    float base_mass_{1.0f};
 
     particle::ParticleBlock<BLOCK_SIZE>* blocks_{nullptr};
 };

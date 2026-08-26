@@ -10,18 +10,18 @@ namespace pico::modules::pusher
 template <size_t BLOCK_SIZE>
 struct BorisPusher
 {
-    void push_block(particle::ParticleBlock<BLOCK_SIZE>& block, const FieldScratch<BLOCK_SIZE>& fields, double dt) const
+    void push_block(particle::ParticleBlock<BLOCK_SIZE>& block, const FieldScratch<BLOCK_SIZE>& fields, double dt, float q_over_m) const
     {
-        kernels::pusher::BorisPusher<BLOCK_SIZE>::push_block(block, fields, dt);
+        kernels::pusher::BorisPusher<BLOCK_SIZE>::push_block(block, fields, dt, q_over_m);
     }
 };
 
 template <size_t BLOCK_SIZE>
 struct RelativisticBorisPusher
 {
-    void push_block(particle::ParticleBlock<BLOCK_SIZE>& block, const FieldScratch<BLOCK_SIZE>& fields, double dt) const
+    void push_block(particle::ParticleBlock<BLOCK_SIZE>& block, const FieldScratch<BLOCK_SIZE>& fields, double dt, float q_over_m) const
     {
-        kernels::pusher::RelativisticBorisPusher<BLOCK_SIZE>::push_block(block, fields, dt);
+        kernels::pusher::RelativisticBorisPusher<BLOCK_SIZE>::push_block(block, fields, dt, q_over_m);
     }
 };
 
