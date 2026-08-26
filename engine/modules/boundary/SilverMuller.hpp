@@ -14,16 +14,18 @@ struct SilverMullerFieldBoundary
         const std::size_t G = grid.guard_cells();
         const std::size_t N = grid.physical_size();
 
-        // Left Open Boundary: Absorbs outgoing -x wave (Ey = -c*Bz)
+        // Left Open Boundary (-x wave: Ey = -c*Bz, Bz = -Ey/c)
         for (std::size_t g = 0; g < G; ++g)
         {
             fields.E.field_y(g) = -fields.B.field_z(G);
+            fields.B.field_z(g) = -fields.E.field_y(G);
         }
 
-        // Right Open Boundary: Absorbs outgoing +x wave (Ey = +c*Bz)
+        // Right Open Boundary (+x wave: Ey = +c*Bz, Bz = +Ey/c)
         for (std::size_t g = 0; g < G; ++g)
         {
             fields.E.field_y(N + G + g) = fields.B.field_z(N + G - 1);
+            fields.B.field_z(N + G + g) = fields.E.field_y(N + G - 1);
         }
     }
 
