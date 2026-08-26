@@ -13,8 +13,11 @@
 #include "engine/perf/LocalityProfiler.hpp"
 #include "engine/perf/PipelineProfiler.hpp"
 
+#include <cmath>
+#include <concepts>
 #include <cstdint>
 #include <omp.h>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -40,47 +43,176 @@ template <class FieldSolverT, class GatherT, class PusherT, class DepositT, clas
 class PICEngine final : public EngineBase<PICEngine<FieldSolverT, GatherT, PusherT, DepositT, FieldBoundaryT, ParticleBoundaryT, FieldInjectorT, BLOCK_SIZE>>
 {
 public:
+    using ParticleSystemType = particle::ParticleSystem<BLOCK_SIZE>;
+    using ParticleBlockType  = particle::ParticleBlock<BLOCK_SIZE>;
+
     PICEngine(PICEngine&&) noexcept            = default;
     PICEngine& operator=(PICEngine&&) noexcept = default;
     PICEngine(const PICEngine&)                = delete;
     PICEngine& operator=(const PICEngine&)     = delete;
 
-    explicit PICEngine(const Grid& grid, std::size_t particles_per_cell = 10, float n0 = 1.0f)
-            : PICEngine(grid, particles_per_cell, FieldBoundaryT{}, ParticleBoundaryT{}, FieldInjectorT{}, n0)
+    explicit PICEngine(const Grid& grid, FieldBoundaryT field_boundary = FieldBoundaryT{}, ParticleBoundaryT particle_boundary = ParticleBoundaryT{},
+                       FieldInjectorT field_injector = FieldInjectorT{})
+            : fields_(grid), current_(grid), field_solver_{}, pusher_{}, gather_{}, deposit_{}, field_boundary_(std::move(field_boundary)),
+              particle_boundary_(std::move(particle_boundary)), field_injector_(std::move(field_injector))
     {
     }
 
-    PICEngine(const Grid& grid, std::size_t particles_per_cell, FieldBoundaryT field_boundary, ParticleBoundaryT particle_boundary,
-              FieldInjectorT field_injector = FieldInjectorT{}, float n0 = 1.0f)
-            : fields_(grid), current_(grid), particles_(grid.physical_size() * particles_per_cell), field_solver_{}, pusher_{}, gather_{}, deposit_{},
-              field_boundary_(std::move(field_boundary)), particle_boundary_(std::move(particle_boundary)), field_injector_(std::move(field_injector)),
-              particles_per_cell_(particles_per_cell)
+    /**
+     * @brief Convenience constructor for a single uniform cold species.
+     */
+    PICEngine(const Grid& grid, std::size_t particles_per_cell, float n0 = 1.0f, float base_charge = -1.0f, float base_mass = 1.0f) : PICEngine(grid)
     {
-        particles_.set_active(grid.physical_size() * particles_per_cell);
-        particles_.init_positions_uniform(grid);
-        particles_.init_velocities_cold(0.0f, 0.0f, 0.0f);
-        particles_.init_density_constant(n0);
+        add_species_uniform(particles_per_cell, n0, base_charge, base_mass);
     }
 
+    /**
+     * @brief Convenience constructor for a single uniform thermal species (Maxwellian velocity distribution).
+     */
+    PICEngine(const Grid& grid, std::size_t particles_per_cell, float v_th, float n0, float base_charge = -1.0f, float base_mass = 1.0f) : PICEngine(grid)
+    {
+        add_species_thermal(particles_per_cell, v_th, n0, base_charge, base_mass);
+    }
+
+    ParticleSystemType& add_species(ParticleSystemType species, std::size_t particles_per_cell)
+    {
+        if (particles_per_cell == 0)
+        {
+            throw std::invalid_argument("PICEngine: particles_per_cell must be greater than zero");
+        }
+
+        species_.push_back(std::move(species));
+        species_ppc_.push_back(particles_per_cell);
+        return species_.back();
+    }
+
+    /**
+     * @brief Add a species with uniform spatial density and cold velocity.
+     */
+    ParticleSystemType& add_species_uniform(std::size_t particles_per_cell, float n0 = 1.0f, float base_charge = -1.0f, float base_mass = 1.0f, float vx = 0.0f, float vy = 0.0f,
+                                            float vz = 0.0f)
+    {
+        return add_species(particles_per_cell, [n0](double) { return n0; }, base_charge, base_mass, vx, vy, vz);
+    }
+
+    /**
+     * @brief Add a species with a spatial density profile function and uniform drift velocity.
+     */
     template <typename DensityFunc>
-    PICEngine(const Grid& grid, std::size_t particles_per_cell, DensityFunc&& density_fn, FieldBoundaryT field_boundary = FieldBoundaryT{},
-              ParticleBoundaryT particle_boundary = ParticleBoundaryT{}, FieldInjectorT field_injector = FieldInjectorT{})
-            : fields_(grid), current_(grid), particles_(grid.physical_size() * particles_per_cell), field_solver_{}, pusher_{}, gather_{}, deposit_{},
-              field_boundary_(std::move(field_boundary)), particle_boundary_(std::move(particle_boundary)), field_injector_(std::move(field_injector)),
-              particles_per_cell_(particles_per_cell)
+        requires std::invocable<DensityFunc, double>
+    ParticleSystemType& add_species(std::size_t particles_per_cell, DensityFunc&& density_fn, float base_charge = -1.0f, float base_mass = 1.0f, float vx = 0.0f, float vy = 0.0f,
+                                    float vz = 0.0f)
     {
-        particles_.set_active(grid.physical_size() * particles_per_cell);
-        particles_.init_positions_uniform(grid);
-        particles_.init_velocities_cold(0.0f, 0.0f, 0.0f);
-        particles_.init_density_profile(grid, std::forward<DensityFunc>(density_fn));
+        if (particles_per_cell == 0)
+        {
+            throw std::invalid_argument("PICEngine: particles_per_cell must be greater than zero");
+        }
+
+        const Grid&       grid            = fields_.E.grid();
+        const std::size_t total_particles = grid.physical_size() * particles_per_cell;
+
+        species_.emplace_back(total_particles, base_charge, base_mass);
+
+        auto& sp = species_.back();
+        sp.set_active(total_particles);
+        sp.init_positions_uniform(grid);
+        sp.init_density_profile(grid, std::forward<DensityFunc>(density_fn));
+        sp.init_velocities_cold(vx, vy, vz);
+
+        species_ppc_.push_back(particles_per_cell);
+        return sp;
     }
 
-    PICEngine(const Grid& grid, particle::ParticleSystem<BLOCK_SIZE> particles, FieldBoundaryT field_boundary = FieldBoundaryT{},
-              ParticleBoundaryT particle_boundary = ParticleBoundaryT{}, FieldInjectorT field_injector = FieldInjectorT{})
-            : fields_(grid), current_(grid), particles_(std::move(particles)), field_solver_{}, pusher_{}, gather_{}, deposit_{}, field_boundary_(std::move(field_boundary)),
-              particle_boundary_(std::move(particle_boundary)), field_injector_(std::move(field_injector)),
-              particles_per_cell_(particles_.active_particles() / grid.physical_size())
+    /**
+     * @brief Add a species with uniform spatial density and thermal Maxwellian velocity distribution.
+     */
+    ParticleSystemType& add_species_thermal(std::size_t particles_per_cell, float v_th, float n0 = 1.0f, float base_charge = -1.0f, float base_mass = 1.0f, float vx_drift = 0.0f,
+                                            float vy_drift = 0.0f, float vz_drift = 0.0f, uint32_t seed = 1337)
     {
+        return add_species_thermal(particles_per_cell, [n0](double) { return n0; }, v_th, base_charge, base_mass, vx_drift, vy_drift, vz_drift, seed);
+    }
+
+    /**
+     * @brief Add a species with a spatial density profile and thermal Maxwellian velocity distribution.
+     */
+    template <typename DensityFunc>
+        requires std::invocable<DensityFunc, double>
+    ParticleSystemType& add_species_thermal(std::size_t particles_per_cell, DensityFunc&& density_fn, float v_th, float base_charge = -1.0f, float base_mass = 1.0f,
+                                            float vx_drift = 0.0f, float vy_drift = 0.0f, float vz_drift = 0.0f, uint32_t seed = 1337)
+    {
+        if (particles_per_cell == 0)
+        {
+            throw std::invalid_argument("PICEngine: particles_per_cell must be greater than zero");
+        }
+
+        const Grid&       grid            = fields_.E.grid();
+        const std::size_t total_particles = grid.physical_size() * particles_per_cell;
+
+        species_.emplace_back(total_particles, base_charge, base_mass);
+
+        auto& sp = species_.back();
+        sp.set_active(total_particles);
+        sp.init_positions_uniform(grid);
+        sp.init_density_profile(grid, std::forward<DensityFunc>(density_fn));
+        sp.init_velocities_thermal(v_th, vx_drift, vy_drift, vz_drift, seed);
+
+        species_ppc_.push_back(particles_per_cell);
+        return sp;
+    }
+
+    /**
+     * @brief Add a species with spatial density and custom velocity profile functions.
+     */
+    template <typename DensityFunc, typename VelFunc>
+        requires std::invocable<DensityFunc, double> && std::invocable<VelFunc, double>
+    ParticleSystemType& add_species_profile(std::size_t particles_per_cell, DensityFunc&& density_fn, VelFunc&& vel_fn, float base_charge = -1.0f, float base_mass = 1.0f)
+    {
+        if (particles_per_cell == 0)
+        {
+            throw std::invalid_argument("PICEngine: particles_per_cell must be greater than zero");
+        }
+
+        const Grid&       grid            = fields_.E.grid();
+        const std::size_t total_particles = grid.physical_size() * particles_per_cell;
+
+        species_.emplace_back(total_particles, base_charge, base_mass);
+
+        auto& sp = species_.back();
+        sp.set_active(total_particles);
+        sp.init_positions_uniform(grid);
+        sp.init_density_profile(grid, std::forward<DensityFunc>(density_fn));
+        sp.init_velocities_profile(std::forward<VelFunc>(vel_fn));
+
+        species_ppc_.push_back(particles_per_cell);
+        return sp;
+    }
+
+    /**
+     * @brief Add a thermal species with spatially varying drift profile function.
+     */
+    template <typename DensityFunc, typename DriftFunc>
+        requires std::invocable<DensityFunc, double> && std::invocable<DriftFunc, double>
+    ParticleSystemType& add_species_thermal_profile(std::size_t particles_per_cell, DensityFunc&& density_fn, float v_th, DriftFunc&& drift_fn, float base_charge = -1.0f,
+                                                    float base_mass = 1.0f, uint32_t seed = 1337)
+    {
+        if (particles_per_cell == 0)
+        {
+            throw std::invalid_argument("PICEngine: particles_per_cell must be greater than zero");
+        }
+
+        const Grid&       grid            = fields_.E.grid();
+        const std::size_t total_particles = grid.physical_size() * particles_per_cell;
+
+        species_.emplace_back(total_particles, base_charge, base_mass);
+
+        auto& sp = species_.back();
+        sp.set_active(total_particles);
+        sp.init_positions_uniform(grid);
+        sp.init_density_profile(grid, std::forward<DensityFunc>(density_fn));
+        sp.init_velocities_thermal(v_th, std::forward<DriftFunc>(drift_fn), seed);
+
+        species_ppc_.push_back(particles_per_cell);
+        return sp;
     }
 
     /**
@@ -95,45 +227,55 @@ public:
         const bool stride_degraded = (locality_threshold_ > 0.0) && (locality_metrics_.mean_stride() > locality_threshold_);
         const bool periodic_sort   = (sort_frequency_ > 0) && (step_counter_ % sort_frequency_ == 0);
 
-        if (particles_.active_particles() > 0 && (periodic_sort || stride_degraded))
+        for (auto& species : species_)
         {
-            execute_stage(pico::perf::Stage::Sorting, [&] { sorter_.sort(particles_, grid); });
+            if (species.active_particles() > 0 && (periodic_sort || stride_degraded))
+            {
+                execute_stage(pico::perf::Stage::Sorting, [&] { sorter_.sort(species, grid); });
+            }
         }
+
         execute_stage(pico::perf::Stage::Boundaries, [&] { field_boundary_.fill_field_guards(fields_, grid); });
 
         current_.zero_out();
         ensure_thread_buffers(grid);
-
         // clang-format off
         #pragma omp parallel
         // clang-format on
         {
-            const int tid            = omp_get_thread_num();
-            auto&     thread_current = thread_currents_[tid];
-            auto&     thread_scratch = thread_scratch_[tid];
-            auto&     thread_metrics = thread_metrics_[tid];
+            const int tid = omp_get_thread_num();
+
+            auto& thread_current = thread_currents_[tid];
+            auto& thread_scratch = thread_scratch_[tid];
+            auto& thread_metrics = thread_metrics_[tid];
 
             thread_current.zero_out();
             thread_metrics.reset();
 
-            // clang-format off
-            #pragma omp for schedule(static)
-            // clang-format on
-            for (auto& block : particles_)
+            for (std::size_t s = 0; s < species_.size(); ++s)
             {
-                step_particle_block(block, thread_scratch, thread_current, thread_metrics, grid, dt);
+                auto&             species = species_[s];
+                const std::size_t ppc     = species_ppc_[s];
+
+                // clang-format off
+                #pragma omp for schedule(static) nowait
+                // clang-format on
+                for (auto& block : species)
+                {
+                    step_particle_block(block, species, ppc, thread_scratch, thread_current, thread_metrics, grid, dt);
+                }
             }
         }
 
-        for (std::size_t i = 0; i < thread_currents_.size(); ++i)
+        for (const auto& thread_current : thread_currents_)
         {
-            current_.accumulate(thread_currents_[i]);
+            current_.accumulate(thread_current);
         }
 
         locality_metrics_.reset();
-        for (std::size_t i = 0; i < thread_metrics_.size(); ++i)
+        for (const auto& thread_metric : thread_metrics_)
         {
-            locality_metrics_.accumulate(thread_metrics_[i]);
+            locality_metrics_.accumulate(thread_metric);
         }
 
         execute_stage(pico::perf::Stage::Boundaries, [&] { field_boundary_.fold_currents(current_, grid); });
@@ -144,7 +286,27 @@ public:
                           field_solver_.solve(fields_, current_, dt);
                           field_injector_.inject(fields_, current_time, dt);
                       });
+
         ++step_counter_;
+    }
+
+    [[nodiscard]] double compute_net_charge() const noexcept
+    {
+        double net_charge = 0.0;
+        for (const auto& species : species_)
+        {
+            double species_q = 0.0;
+            for (std::size_t b = 0; b < species.num_blocks(); ++b)
+            {
+                const auto& block = species.blocks()[b];
+                for (std::size_t i = 0; i < block.activeCount; ++i)
+                {
+                    species_q += block.weight[i];
+                }
+            }
+            net_charge += species_q * species.base_charge();
+        }
+        return net_charge;
     }
 
     void enable_stage_profiling(bool enable) noexcept
@@ -155,14 +317,6 @@ public:
     {
         enable_locality_diagnostics_ = enable;
     }
-    [[nodiscard]] double mean_cell_stride() const noexcept
-    {
-        return locality_metrics_.mean_stride();
-    }
-    [[nodiscard]] const pico::diagnostics::LocalityMetrics& locality_metrics() const noexcept
-    {
-        return locality_metrics_;
-    }
     void set_sort_frequency(std::size_t frequency) noexcept
     {
         sort_frequency_ = frequency;
@@ -170,6 +324,15 @@ public:
     void set_locality_threshold(double max_stride) noexcept
     {
         locality_threshold_ = max_stride;
+    }
+
+    [[nodiscard]] double mean_cell_stride() const noexcept
+    {
+        return locality_metrics_.mean_stride();
+    }
+    [[nodiscard]] const pico::diagnostics::LocalityMetrics& locality_metrics() const noexcept
+    {
+        return locality_metrics_;
     }
     [[nodiscard]] const pico::perf::PipelineProfiler& profiler() const noexcept
     {
@@ -182,33 +345,42 @@ public:
         step_counter_ = 0;
     }
 
-    particle::ParticleSystem<BLOCK_SIZE>& particles() noexcept
+    [[nodiscard]] ParticleSystemType& particles(std::size_t idx = 0)
     {
-        return particles_;
+        return species_.at(idx);
     }
-    const particle::ParticleSystem<BLOCK_SIZE>& particles() const noexcept
+    [[nodiscard]] const ParticleSystemType& particles(std::size_t idx = 0) const
     {
-        return particles_;
+        return species_.at(idx);
     }
-    EMFields<BLOCK_SIZE>& fields() noexcept
+    [[nodiscard]] const std::vector<ParticleSystemType>& species() const noexcept
+    {
+        return species_;
+    }
+    [[nodiscard]] std::size_t num_species() const noexcept
+    {
+        return species_.size();
+    }
+    [[nodiscard]] std::size_t particles_per_cell(std::size_t species_idx = 0) const
+    {
+        return species_ppc_.at(species_idx);
+    }
+
+    [[nodiscard]] EMFields<BLOCK_SIZE>& fields() noexcept
     {
         return fields_;
     }
-    const EMFields<BLOCK_SIZE>& fields() const noexcept
+    [[nodiscard]] const EMFields<BLOCK_SIZE>& fields() const noexcept
     {
         return fields_;
     }
-    FieldSystem<BLOCK_SIZE>& current() noexcept
+    [[nodiscard]] FieldSystem<BLOCK_SIZE>& current() noexcept
     {
         return current_;
     }
-    const FieldSystem<BLOCK_SIZE>& current() const noexcept
+    [[nodiscard]] const FieldSystem<BLOCK_SIZE>& current() const noexcept
     {
         return current_;
-    }
-    [[nodiscard]] std::size_t particles_per_cell() const noexcept
-    {
-        return particles_per_cell_;
     }
 
 private:
@@ -245,17 +417,21 @@ private:
         }
     }
 
-    void step_particle_block(auto& block, auto& scratch, auto& current, auto& thread_metrics, const Grid& grid, double dt)
+    void step_particle_block(ParticleBlockType& block, const ParticleSystemType& species, std::size_t ppc, FieldScratch<BLOCK_SIZE>& scratch, FieldSystem<BLOCK_SIZE>& current,
+                             pico::diagnostics::LocalityMetrics& thread_metrics, const Grid& grid, double dt)
     {
+        const float dt_f = static_cast<float>(dt);
+
         const uint64_t t0 = enable_stage_profiling_ ? pico::perf::read_cpu_ticks() : 0;
         gather_.gather_block(block, fields_, grid, scratch);
 
         const uint64_t t1 = enable_stage_profiling_ ? pico::perf::read_cpu_ticks() : 0;
-        pusher_.push_block(block, scratch, dt);
+        pusher_.push_block(block, scratch, dt_f, species.base_charge() / species.base_mass());
+
         particle_boundary_.apply(block, grid);
 
         const uint64_t t2 = enable_stage_profiling_ ? pico::perf::read_cpu_ticks() : 0;
-        deposit_.deposit_block(block, current, grid, dt, particles_per_cell_);
+        deposit_.deposit_block(block, current, grid, dt_f, static_cast<float>(ppc), species.base_charge(), species.base_mass());
 
         if (enable_stage_profiling_)
         {
@@ -264,34 +440,37 @@ private:
             profiler_.add_ticks(pico::perf::Stage::Pusher, t2 - t1);
             profiler_.add_ticks(pico::perf::Stage::Deposit, t3 - t2);
         }
+
         if (enable_locality_diagnostics_)
         {
-            pico::diagnostics::LocalityProfiler<particle::ParticleBlock<BLOCK_SIZE>>::process_block(block, grid, thread_metrics);
+            pico::diagnostics::LocalityProfiler<ParticleBlockType>::process_block(block, grid, thread_metrics);
         }
     }
 
-    EMFields<BLOCK_SIZE>                 fields_;
-    FieldSystem<BLOCK_SIZE>              current_;
-    particle::ParticleSystem<BLOCK_SIZE> particles_;
+    EMFields<BLOCK_SIZE>    fields_;
+    FieldSystem<BLOCK_SIZE> current_;
 
-    FieldSolverT                                      field_solver_;
-    PusherT                                           pusher_;
-    GatherT                                           gather_;
-    DepositT                                          deposit_;
-    FieldBoundaryT                                    field_boundary_;
-    ParticleBoundaryT                                 particle_boundary_;
-    FieldInjectorT                                    field_injector_;
+    std::vector<ParticleSystemType> species_;
+    std::vector<std::size_t>        species_ppc_;
+
+    FieldSolverT      field_solver_;
+    PusherT           pusher_;
+    GatherT           gather_;
+    DepositT          deposit_;
+    FieldBoundaryT    field_boundary_;
+    ParticleBoundaryT particle_boundary_;
+    FieldInjectorT    field_injector_;
+
     pico::modules::sorter::ParticleSorter<BLOCK_SIZE> sorter_;
 
     std::vector<FieldSystem<BLOCK_SIZE>>            thread_currents_;
     std::vector<FieldScratch<BLOCK_SIZE>>           thread_scratch_;
     std::vector<pico::diagnostics::LocalityMetrics> thread_metrics_;
 
-    std::size_t particles_per_cell_{10};
-
     pico::perf::PipelineProfiler profiler_{};
-    std::size_t                  step_counter_{0};
-    std::size_t                  sort_frequency_{0};
+
+    std::size_t step_counter_{0};
+    std::size_t sort_frequency_{0};
 
     pico::diagnostics::LocalityMetrics locality_metrics_{};
     double                             locality_threshold_{0.0};
