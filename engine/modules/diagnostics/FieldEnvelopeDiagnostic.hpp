@@ -29,11 +29,17 @@ public:
 
         for (std::size_t i = 0; i < cells; ++i)
         {
-            const std::size_t buf_i = grid.physical_to_buffer(i);
-            const double      ey    = fields.E.field_y(buf_i);
-            const double      bz    = fields.B.field_z(buf_i);
+            const std::size_t buf_i      = grid.physical_to_buffer(i);
+            const std::size_t buf_i_prev = (i > 0) ? grid.physical_to_buffer(i - 1) : buf_i;
 
-            const double u           = 0.5 * (ey * ey + bz * bz);
+            const double ey = fields.E.field_y(buf_i);
+
+            // Interpolate B_z from edges (i-1/2, i+1/2) to cell node i
+            const double bz_curr   = fields.B.field_z(buf_i);
+            const double bz_prev   = fields.B.field_z(buf_i_prev);
+            const double bz_node_i = 0.5 * (bz_curr + bz_prev);
+
+            const double u           = 0.5 * (ey * ey + bz_node_i * bz_node_i);
             result.energy_density[i] = u;
             result.total_transverse_energy += u * dx;
         }
