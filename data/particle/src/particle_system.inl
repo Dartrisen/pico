@@ -176,14 +176,14 @@ void ParticleSystem<BLOCK_SIZE>::init_positions_uniform(const Grid& grid)
 // ============================================================================
 
 template <size_t BLOCK_SIZE>
-void ParticleSystem<BLOCK_SIZE>::init_velocities_cold(float vx, float vy, float vz)
+void ParticleSystem<BLOCK_SIZE>::init_velocities_cold(float px, float py, float pz)
 {
     for (size_t b = 0; b < numBlocks_; ++b)
     {
         auto& block = blocks_[b];
-        std::fill(block.momentum_x.begin(), block.momentum_x.end(), base_mass_ * vx);
-        std::fill(block.momentum_y.begin(), block.momentum_y.end(), base_mass_ * vy);
-        std::fill(block.momentum_z.begin(), block.momentum_z.end(), base_mass_ * vz);
+        std::fill(block.momentum_x.begin(), block.momentum_x.end(), px);
+        std::fill(block.momentum_y.begin(), block.momentum_y.end(), py);
+        std::fill(block.momentum_z.begin(), block.momentum_z.end(), pz);
     }
 }
 
@@ -197,11 +197,11 @@ void ParticleSystem<BLOCK_SIZE>::init_velocities_profile(VelFunc&& vel_fn)
         for (size_t i = 0; i < block.activeCount; ++i)
         {
             const double x0   = block.position_x[i];
-            auto [vx, vy, vz] = vel_fn(x0);
+            auto [px, py, pz] = vel_fn(x0);
 
-            block.momentum_x[i] = base_mass_ * static_cast<float>(vx);
-            block.momentum_y[i] = base_mass_ * static_cast<float>(vy);
-            block.momentum_z[i] = base_mass_ * static_cast<float>(vz);
+            block.momentum_x[i] = static_cast<float>(px);
+            block.momentum_y[i] = static_cast<float>(py);
+            block.momentum_z[i] = static_cast<float>(pz);
         }
     }
 }
