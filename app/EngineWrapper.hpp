@@ -25,6 +25,18 @@ public:
         return engine_.fields().E.grid().physical_size();
     }
 
+    double injected_energy() const override
+    {
+        if constexpr (requires { engine_.injector().injected_energy(); })
+        {
+            return engine_.injector().injected_energy();
+        }
+        else
+        {
+            return 0.0;
+        }
+    }
+
     double mean_cell_stride() const noexcept override
     {
         return engine_.mean_cell_stride();

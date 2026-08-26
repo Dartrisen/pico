@@ -12,4 +12,5 @@ struct IEngine
     virtual std::size_t                         grid_cells() const                = 0;
     virtual const pico::perf::PipelineProfiler& profiler() const                  = 0;
     virtual double                              mean_cell_stride() const noexcept = 0;
+    virtual double                              injected_energy() const           = 0;
 };
