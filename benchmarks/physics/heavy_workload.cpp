@@ -33,7 +33,7 @@ int main()
     constexpr std::size_t BS         = 64;
     constexpr float       target_n0  = 2.0f;
 
-    assert(dx > 0.95 * dt && "CFL condition violated.");
+    assert(dt <= 0.95 * dx && "CFL condition violated.");
 
     Grid grid(grid_cells, dx, /*guards=*/4);
 

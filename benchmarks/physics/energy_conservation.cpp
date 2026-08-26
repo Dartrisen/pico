@@ -30,7 +30,7 @@ int main()
     constexpr std::size_t nsteps     = 1000;
     constexpr std::size_t BS         = 64;
 
-    assert(dx > 0.95 * dt && "CFL condition violated: dx must be greater than 0.95 * dt for stability.");
+    assert(dt <= 0.95 * dx && "CFL condition violated: dx must be greater than 0.95 * dt for stability.");
 
     Grid grid(grid_cells, dx);
 
@@ -69,7 +69,7 @@ int main()
             [&](int /*step*/)
             {
                 const auto m = EnergyDiag::evaluate(concrete_wrapper->engine());
-                energy_verifier.record_step(m.e_field_total(), m.e_kin);
+                energy_verifier.record_step(m.e_field_total(), m.e_kin());
             });
 
     // 5. Verification & Reporting

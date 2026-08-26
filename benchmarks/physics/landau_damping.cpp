@@ -39,7 +39,7 @@ int main()
     constexpr float  v1   = 0.08f; // Scaled wave perturbation to remain above noise floor at 1000 PPC
     constexpr double v_th = 4.0;   // Thermal velocity for k*lambda_D ~ 0.31
 
-    assert(dx > 0.95 * dt && "CFL condition violated.");
+    assert(dt <= 0.95 * dx && "CFL condition violated.");
 
     Grid grid(grid_cells, dx, /*guards=*/4);
 

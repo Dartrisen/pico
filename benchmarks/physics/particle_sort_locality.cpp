@@ -46,7 +46,7 @@ int main()
     constexpr std::size_t nsteps     = 500;
     constexpr std::size_t BS         = 64;
 
-    assert(dx > 0.95 * dt && "CFL condition violated.");
+    assert(dt <= 0.95 * dx && "CFL condition violated.");
 
     Grid grid(grid_cells, dx, /*guards=*/4);
 

@@ -39,7 +39,7 @@ int main()
     constexpr float       t_peak      = 3.0f;
     constexpr std::size_t inject_cell = 0;
 
-    assert(dx > 0.95 * dt && "CFL condition violated.");
+    assert(dt <= 0.95 * dx && "CFL condition violated.");
 
     Grid grid(grid_cells, dx);
 

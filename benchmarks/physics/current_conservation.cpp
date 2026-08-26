@@ -33,7 +33,7 @@ int main()
     constexpr float       v_drift    = 0.05f;
     constexpr float       target_n0  = 1.0f;
 
-    assert(dx > 0.95 * dt && "CFL condition violated.");
+    assert(dt <= 0.95 * dx && "CFL condition violated.");
 
     Grid grid(grid_cells, dx);
 
@@ -48,12 +48,13 @@ int main()
 
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
-    // 1. Initialize Engine & Native Initial Particle Drift
-    EngineT engine_instance{grid, ppc, target_n0};
+    // 1. Base Engine Initialization & Cold Species Drift Setup
+    EngineT engine_instance{grid};
 
-    auto& particles = engine_instance.particles();
-    particles.init_positions_uniform(grid);
-    particles.init_velocities_cold(v_drift, 0.0f, 0.0f);
+    engine_instance.add_species_uniform(ppc, target_n0,
+                                        /*base_charge=*/-1.0f,
+                                        /*base_mass=*/1.0f,
+                                        /*vx=*/v_drift, /*vy=*/0.0f, /*vz=*/0.0f);
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
@@ -82,7 +83,7 @@ int main()
                 const auto energy_m  = EnergyDiag::evaluate(eng);
                 const auto current_m = CurrentDiag::evaluate(eng, expected_current);
 
-                energy_verifier.record_step(energy_m.e_field_total(), energy_m.e_kin);
+                energy_verifier.record_step(energy_m.e_field_total(), energy_m.e_kin());
                 current_verifier.record_step(current_m.avg_jx, current_m.max_ampere_res);
             });
 
