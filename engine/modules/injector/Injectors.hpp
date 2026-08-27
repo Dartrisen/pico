@@ -49,7 +49,7 @@ public:
         fields.B.field_z(buf_idx) += bz_val;
 
         // Accumulate grid energy added by the pulse
-        accumulated_injected_energy_ += 0.5 * (ey_val * ey_val + bz_val * bz_val) * dx;
+        accumulated_injected_energy_ += 0.5 * (ey_val * ey_val + bz_val * bz_val) * dt;
     }
 
     [[nodiscard]] double injected_energy() const noexcept
