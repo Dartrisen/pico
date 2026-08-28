@@ -71,7 +71,7 @@ int main()
     using Field     = pico::modules::field::YeeMaxwell<BS>;
     using Push      = pico::modules::pusher::RelativisticBorisPusher<BS>;
     using Gather    = pico::modules::gather::Gather<Shape, BS>;
-    using Dep       = pico::modules::deposit::OptEsirkepovDeposit<Shape, BS>;
+    using Dep       = pico::modules::deposit::EsirkepovDeposit<Shape, BS>;
     using BoundaryF = pico::modules::boundary::PeriodicBoundaryFieldHandler<BS>;
     using BoundaryP = pico::modules::boundary::PeriodicBoundaryParticleHandler<BS>;
     using Injector  = pico::modules::injector::NoInjector<BS>;
@@ -91,7 +91,7 @@ int main()
         if (x < x_start || x > x_end)
             return 0.0f;
 
-        constexpr float n_start = 0.1f;
+        constexpr float n_start = 0.01f;
         constexpr float n_end   = 0.4f;
 
         // Smooth edge transitions at boundary walls prevent artificial sheath shocks
