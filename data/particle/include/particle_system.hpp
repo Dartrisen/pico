@@ -93,6 +93,12 @@ public:
 
     void init_velocities_wave(float v0, double k, bool longitudinal_only = true);
 
+    // ---- Relativistic Thermal Initializers (Maxwell-Jüttner) ----
+    template <typename DriftFunc>
+    void init_velocities_rel_thermal(float theta, DriftFunc&& drift_func, uint32_t seed = 42);
+
+    void init_velocities_rel_thermal(float theta, float u_drift_x = 0.0f, float u_drift_y = 0.0f, float u_drift_z = 0.0f, uint32_t seed = 42);
+
     // ---- Mutators & Modifiers ----
     void set_active(size_t n);
 

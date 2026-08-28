@@ -178,12 +178,16 @@ void ParticleSystem<BLOCK_SIZE>::init_positions_uniform(const Grid& grid)
 template <size_t BLOCK_SIZE>
 void ParticleSystem<BLOCK_SIZE>::init_velocities_cold(float px, float py, float pz)
 {
+    const float p_sq      = px * px + py * py + pz * pz;
+    const float inv_gamma = 1.0f / std::sqrt(1.0f + p_sq);
+
     for (size_t b = 0; b < numBlocks_; ++b)
     {
         auto& block = blocks_[b];
         std::fill(block.momentum_x.begin(), block.momentum_x.end(), px);
         std::fill(block.momentum_y.begin(), block.momentum_y.end(), py);
         std::fill(block.momentum_z.begin(), block.momentum_z.end(), pz);
+        std::fill(block.inv_gamma.begin(), block.inv_gamma.end(), inv_gamma);
     }
 }
 
@@ -193,15 +197,24 @@ void ParticleSystem<BLOCK_SIZE>::init_velocities_profile(VelFunc&& vel_fn)
 {
     for (size_t b = 0; b < numBlocks_; ++b)
     {
-        auto& block = blocks_[b];
-        for (size_t i = 0; i < block.activeCount; ++i)
+        auto&        block = blocks_[b];
+        const size_t count = block.activeCount;
+
+        for (size_t i = 0; i < count; ++i)
         {
             const double x0   = block.position_x[i];
             auto [px, py, pz] = vel_fn(x0);
 
-            block.momentum_x[i] = static_cast<float>(px);
-            block.momentum_y[i] = static_cast<float>(py);
-            block.momentum_z[i] = static_cast<float>(pz);
+            const float fx = static_cast<float>(px);
+            const float fy = static_cast<float>(py);
+            const float fz = static_cast<float>(pz);
+
+            block.momentum_x[i] = fx;
+            block.momentum_y[i] = fy;
+            block.momentum_z[i] = fz;
+
+            const float p_sq   = fx * fx + fy * fy + fz * fz;
+            block.inv_gamma[i] = 1.0f / std::sqrt(1.0f + p_sq);
         }
     }
 }
@@ -261,6 +274,76 @@ void ParticleSystem<BLOCK_SIZE>::init_velocities_wave(float v0, double k, bool l
                 const float v_y    = longitudinal_only ? 0.0f : static_cast<float>(v0 * std::cos(k * x));
                 return std::tuple{v_wave, v_y, 0.0f};
             });
+}
+
+// ============================================================================
+// Relativistic Velocity Initializers (Maxwell-Jüttner & Lorentz Drift Boost)
+// ============================================================================
+
+// Isotropic Maxwell-Jüttner Thermal Sampler (Zenitani 2015 Rejection Algorithm)
+template <size_t BLOCK_SIZE>
+template <typename DriftFunc>
+void ParticleSystem<BLOCK_SIZE>::init_velocities_rel_thermal(float theta, DriftFunc&& drift_func, uint32_t seed)
+{
+    std::mt19937                          gen(seed);
+    std::uniform_real_distribution<float> u_dist(1e-7f, 1.0f - 1e-7f);
+
+    // Samples rest-frame specific momentum u' = gamma' * v' from Maxwell-Jüttner distribution
+    auto sample_maxwell_juttner = [&](float th) -> std::tuple<float, float, float, float>
+    {
+        float x1, u_mag;
+        while (true)
+        {
+            const float u1 = u_dist(gen), u2 = u_dist(gen), u3 = u_dist(gen);
+            const float u4 = u_dist(gen), u5 = u_dist(gen), u6 = u_dist(gen), u7 = u_dist(gen);
+
+            x1             = -th * std::log(u1 * u2 * u3);
+            const float x2 = -th * std::log(u4 * u5 * u6 * u7);
+
+            u_mag = std::sqrt(x1 * (x1 + 2.0f));
+            if (u_dist(gen) * (x1 + x2) <= u_mag)
+            {
+                break; // Accepted
+            }
+        }
+
+        const float gamma_prime = 1.0f + x1;
+        const float cos_theta   = 2.0f * u_dist(gen) - 1.0f;
+        const float sin_theta   = std::sqrt(std::max(0.0f, 1.0f - cos_theta * cos_theta));
+        const float phi         = 2.0f * std::numbers::pi_v<float> * u_dist(gen);
+
+        return {u_mag * sin_theta * std::cos(phi), u_mag * sin_theta * std::sin(phi), u_mag * cos_theta, gamma_prime};
+    };
+
+    init_velocities_profile(
+            [&](double x)
+            {
+                // Retrieve drift specific momentum u_d = gamma_d * v_d
+                const auto [udx, udy, udz] = drift_func(x);
+                const float ud_sq          = udx * udx + udy * udy + udz * udz;
+
+                // Rest-frame thermal momentum u' and gamma'
+                const auto [upx, upy, upz, gamma_prime] = sample_maxwell_juttner(theta);
+
+                if (ud_sq == 0.0f)
+                {
+                    return std::tuple{upx, upy, upz};
+                }
+
+                // Relativistic 4-velocity Lorentz boost: u_lab = u' + u_d * ( (u_d . u')/(gamma_d + 1) + gamma' )
+                const float gamma_d   = std::sqrt(1.0f + ud_sq);
+                const float u_dot_up  = udx * upx + udy * upy + udz * upz;
+                const float boost_fac = (u_dot_up / (gamma_d + 1.0f)) + gamma_prime;
+
+                return std::tuple{upx + udx * boost_fac, upy + udy * boost_fac, upz + udz * boost_fac};
+            });
+}
+
+// Constant Relativistic Drift Overload (u_drift = gamma_drift * v_drift)
+template <size_t BLOCK_SIZE>
+void ParticleSystem<BLOCK_SIZE>::init_velocities_rel_thermal(float theta, float u_drift_x, float u_drift_y, float u_drift_z, uint32_t seed)
+{
+    init_velocities_rel_thermal(theta, [=](double) { return std::tuple{u_drift_x, u_drift_y, u_drift_z}; }, seed);
 }
 
 // ============================================================================
