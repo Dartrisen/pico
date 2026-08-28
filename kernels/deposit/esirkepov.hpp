@@ -14,7 +14,7 @@ namespace kernels::deposit
 template <class Shape, std::size_t BLOCK_SIZE>
 struct EsirkepovDeposit
 {
-    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc, float base_charge, float base_mass)
+    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc, float base_charge)
     {
         constexpr int S = Shape::S;
 
@@ -23,7 +23,6 @@ struct EsirkepovDeposit
         const double j_scale      = (1.0 / static_cast<double>(ppc)) / static_cast<double>(dt);
         const double scale_factor = (1.0 / static_cast<double>(ppc)) * inv_dx;
         const int    guards       = static_cast<int>(grid.guard_cells());
-        const double inv_m        = 1.0 / static_cast<double>(base_mass);
 
         const std::size_t max_idx = J.num_blocks() * BLOCK_SIZE;
 
@@ -37,12 +36,9 @@ struct EsirkepovDeposit
             const double uz        = static_cast<double>(pb.momentum_z[p]);
             const double inv_gamma = static_cast<double>(pb.inv_gamma[p]);
 
-            // Relativistic factor gamma (c = 1)
-            const double inv_gamma_m = inv_m * inv_gamma;
-
-            const double vx = ux * inv_gamma_m;
-            const double vy = uy * inv_gamma_m;
-            const double vz = uz * inv_gamma_m;
+            const double vx = ux * inv_gamma;
+            const double vy = uy * inv_gamma;
+            const double vz = uz * inv_gamma;
 
             // 2. Compute positions without std::clamp so guard cells collect boundary flux
             const double x2 = static_cast<double>(pb.position_x[p]);
