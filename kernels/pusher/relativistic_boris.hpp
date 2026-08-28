@@ -72,6 +72,7 @@ struct RelativisticBorisPusher
             const float gamma_final = std::sqrt(1.0f + u_final_sq);
 
             pb.position_x[p] += dt * (ux / gamma_final);
+            pb.inv_gamma[p] = 1 / gamma_final;
         }
     }
 };

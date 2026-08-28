@@ -12,7 +12,7 @@ namespace kernels::deposit
 {
 
 template <class Shape, std::size_t BLOCK_SIZE>
-struct OptEsirkepovDeposit
+struct EsirkepovDeposit
 {
     static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc, float base_charge, float base_mass)
     {
@@ -32,14 +32,13 @@ struct OptEsirkepovDeposit
             const float q_p = pb.weight[p] * base_charge;
 
             // 1. Calculate proper relativistic velocity v = u / gamma
-            const double ux   = static_cast<double>(pb.momentum_x[p]);
-            const double uy   = static_cast<double>(pb.momentum_y[p]);
-            const double uz   = static_cast<double>(pb.momentum_z[p]);
-            const double u_sq = ux * ux + uy * uy + uz * uz;
+            const double ux        = static_cast<double>(pb.momentum_x[p]);
+            const double uy        = static_cast<double>(pb.momentum_y[p]);
+            const double uz        = static_cast<double>(pb.momentum_z[p]);
+            const double inv_gamma = static_cast<double>(pb.inv_gamma[p]);
 
             // Relativistic factor gamma (c = 1)
-            const double gamma       = std::sqrt(1.0 + u_sq);
-            const double inv_gamma_m = inv_m / gamma;
+            const double inv_gamma_m = inv_m * inv_gamma;
 
             const double vx = ux * inv_gamma_m;
             const double vy = uy * inv_gamma_m;

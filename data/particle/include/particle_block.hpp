@@ -31,6 +31,9 @@ struct alignas(64) ParticleBlock
     std::array<float, BLOCK_SIZE> momentum_y;
     std::array<float, BLOCK_SIZE> momentum_z;
 
+    // --- 1/gamma for deposit ---
+    std::array<float, BLOCK_SIZE> inv_gamma;
+
     // --- Particle Weight (w_i) ---
     std::array<float, BLOCK_SIZE> weight;
 

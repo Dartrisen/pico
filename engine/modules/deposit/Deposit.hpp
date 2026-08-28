@@ -16,12 +16,12 @@ struct SimpleDeposit
 };
 
 template <class Shape, std::size_t BLOCK_SIZE>
-struct OptEsirkepovDeposit
+struct EsirkepovDeposit
 {
     template <typename Block, typename FieldSystem, typename GridT>
     void deposit_block(const Block& block, FieldSystem& current, const GridT& grid, double dt, uint32_t n_ppc, float base_charge, float base_mass) const
     {
-        kernels::deposit::OptEsirkepovDeposit<Shape, BLOCK_SIZE>::deposit(block, current, grid, dt, n_ppc, base_charge, base_mass);
+        kernels::deposit::EsirkepovDeposit<Shape, BLOCK_SIZE>::deposit(block, current, grid, dt, n_ppc, base_charge, base_mass);
     }
 };
 
