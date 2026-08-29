@@ -69,12 +69,13 @@ struct alignas(64) ParticleBlock
      */
     void removeParticle(size_t index) noexcept
     {
-        size_t last = --activeCount;
+        const size_t last = --activeCount;
 
         position_x[index] = position_x[last];
         momentum_x[index] = momentum_x[last];
         momentum_y[index] = momentum_y[last];
         momentum_z[index] = momentum_z[last];
+        inv_gamma[index]  = inv_gamma[last];
         weight[index]     = weight[last];
     }
 
