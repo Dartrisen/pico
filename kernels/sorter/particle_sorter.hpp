@@ -117,7 +117,8 @@ struct ParticleSorter
                 dst_block.momentum_y[local_id] = block.momentum_y[i];
                 dst_block.momentum_z[local_id] = block.momentum_z[i];
 
-                dst_block.weight[local_id] = block.weight[i];
+                dst_block.inv_gamma[local_id] = block.inv_gamma[i];
+                dst_block.weight[local_id]    = block.weight[i];
             }
         }
 
