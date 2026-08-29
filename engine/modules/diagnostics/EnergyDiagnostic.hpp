@@ -50,7 +50,7 @@ template <class EngineT>
 class EnergyDiagnostic
 {
 private:
-    double initial_energy_{-1.0};
+    double initial_energy_{0.0};
 
 public:
     /// Single-pass diagnostic computation across electromagnetic fields and per-species particles
@@ -94,7 +94,7 @@ public:
                 continue;
             }
 
-            const double inv_m0      = 1.0 / static_cast<double>(species.base_mass());
+            const double base_mass   = static_cast<double>(species.base_mass());
             const double species_ppc = static_cast<double>(species.active_particles()) / static_cast<double>(grid_cells);
             const double ppc_weight  = (species_ppc > 0.0) ? (1.0 / species_ppc) : 1.0;
 
@@ -103,12 +103,15 @@ public:
             {
                 for (std::size_t i = 0; i < block.activeCount; ++i)
                 {
-                    const double px = block.momentum_x[i];
-                    const double py = block.momentum_y[i];
-                    const double pz = block.momentum_z[i];
-                    const double w  = block.weight[i];
+                    const double ux    = block.momentum_x[i];
+                    const double uy    = block.momentum_y[i];
+                    const double uz    = block.momentum_z[i];
+                    const double w     = block.weight[i];
+                    const float  u_sq  = ux * ux + uy * uy + uz * uz;
+                    const float  gamma = std::sqrt(1.0f + u_sq);
 
-                    species_e_kin += 0.5 * w * (px * px + py * py + pz * pz) * inv_m0;
+                    // Numerically stable for both small and large u
+                    species_e_kin += base_mass * w * u_sq / (gamma + 1.0f);
                 }
             }
             metrics.e_kin_species.push_back(species_e_kin * ppc_weight);
