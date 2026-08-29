@@ -13,7 +13,7 @@ namespace kernels::deposit
 template <class Shape, std::size_t BLOCK_SIZE>
 struct CurrentDeposit
 {
-    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt, float ppc, float base_charge)
+    static void deposit(const particle::ParticleBlock<BLOCK_SIZE>& pb, FieldSystem<BLOCK_SIZE>& J, const Grid& grid, [[maybe_unused]] float dt, float ppc, float base_charge)
     {
         constexpr int S = Shape::S;
 
