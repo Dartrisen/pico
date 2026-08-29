@@ -34,20 +34,32 @@ public:
             // Left Wall Collision (x < 0)
             if (x < 0.0)
             {
+                const float px = std::sqrt(rayleigh(rng_));
+                const float py = gauss(rng_);
+                const float pz = gauss(rng_);
+
                 block.position_x[p] = 0.0;
-                // Inject positive momentum x (half-Maxwellian flux)
-                block.momentum_x[p] = std::sqrt(rayleigh(rng_));
-                block.momentum_y[p] = gauss(rng_);
-                block.momentum_z[p] = gauss(rng_);
+                block.momentum_x[p] = px;
+                block.momentum_y[p] = py;
+                block.momentum_z[p] = pz;
+
+                const float p_sq   = px * px + py * py + pz * pz;
+                block.inv_gamma[p] = 1.0f / std::sqrt(1.0f + p_sq);
             }
             // Right Wall Collision (x >= L)
             else if (x >= L)
             {
+                const float px = -std::sqrt(rayleigh(rng_));
+                const float py = gauss(rng_);
+                const float pz = gauss(rng_);
+
                 block.position_x[p] = L - 1e-6;
-                // Inject negative momentum x (half-Maxwellian flux)
-                block.momentum_x[p] = -std::sqrt(rayleigh(rng_));
-                block.momentum_y[p] = gauss(rng_);
-                block.momentum_z[p] = gauss(rng_);
+                block.momentum_x[p] = px;
+                block.momentum_y[p] = py;
+                block.momentum_z[p] = pz;
+
+                const float p_sq   = px * px + py * py + pz * pz;
+                block.inv_gamma[p] = 1.0f / std::sqrt(1.0f + p_sq);
             }
         }
     }
