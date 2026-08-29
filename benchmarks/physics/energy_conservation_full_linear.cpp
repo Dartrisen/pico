@@ -135,9 +135,6 @@ int main()
                 const auto m = EnergyDiag::evaluate(concrete_wrapper->engine());
 
                 assert(m.e_kin_species.size() == 2 && "Expected 2 species kinetic energy components.");
-                [[maybe_unused]] const double e_kin_electrons = m.e_kin_species[0];
-                [[maybe_unused]] const double e_kin_protons   = m.e_kin_species[1];
-
                 energy_verifier.record_step(m.e_field_total(), m.e_kin_total());
 
                 if (step % 50 == 0)
