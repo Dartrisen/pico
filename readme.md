@@ -23,7 +23,7 @@ Compile-time physics composition, cache-friendly particle blocks, and a clear pa
 Pico is a research-oriented particle-in-cell (PIC) framework. It provides a compact implementation of the main PIC data path: gather electromagnetic fields, push particles, apply particle boundaries, deposit current, and advance the fields. The project is deliberately explicit about where runtime flexibility ends and compile-time performance begins.
 
 > **Project status**
-> Pico currently contains a 1D non-relativistic PIC path with a Yee-Maxwell field solver, Boris pusher, field gather, current deposition, boundary handlers, a laser injector, sorting, profiling, verification programs, and microbenchmarks. YAML/JSON configuration, checkpointing, and collision execution are not currently part of `PICEngine`.
+> Pico currently contains a 1D fully-relativistic PIC path with a Yee-Maxwell field solver, Boris pusher, field gather, current deposition, boundary handlers, a laser injector, sorting, profiling, verification programs, and microbenchmarks. YAML/JSON configuration, checkpointing, and collision execution are not currently part of `PICEngine`.
 
 ## Contents
 
@@ -262,7 +262,7 @@ tests/               GoogleTest suite
 
 ## Current Boundaries
 
-* [ ] Relativistic dynamics (current Boris pusher, field gather, and deposition modules are non-relativistic)
+* [x] Relativistic dynamics
 * [ ] YAML, JSON, or command-line input file parsing
 * [ ] Checkpoint and restart state serialization
 * [ ] Binary collision execution in `PICEngine`
