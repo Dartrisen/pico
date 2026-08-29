@@ -1,5 +1,6 @@
 #include "data/field/include/field_em.hpp"
 #include "data/particle/include/particle_block.hpp"
+#include "kernels/pusher/boris.hpp"
 #include "kernels/pusher/relativistic_boris.hpp"
 
 #include <cmath>
@@ -10,15 +11,14 @@ class RelativisticBorisPusherTest : public ::testing::Test
 protected:
     static constexpr size_t BS = 32;
 
-    particle::ParticleBlock<BS> create_particle(float px, float py, float pz, float x = 0.0f, float m = 1.0f, float q = 1.0f)
+    particle::ParticleBlock<BS> create_particle(float px, float py, float pz, float x = 0.0f)
     {
         particle::ParticleBlock<BS> block{};
         block.activeCount   = 1;
-        block.mass[0]       = m;
-        block.charge[0]     = q;
         block.momentum_x[0] = px;
         block.momentum_y[0] = py;
         block.momentum_z[0] = pz;
+        block.inv_gamma[0]  = 1.0f;
         block.position_x[0] = x;
         return block;
     }
@@ -42,7 +42,7 @@ protected:
     {
         for (int i = 0; i < steps; ++i)
         {
-            kernels::pusher::RelativisticBorisPusher<BS>::push_block(block, scratch, dt);
+            kernels::pusher::RelativisticBorisPusher<BS>::push_block(block, scratch, dt, 1.0f);
         }
     }
 
@@ -51,9 +51,8 @@ protected:
         const float px    = block.momentum_x[0];
         const float py    = block.momentum_y[0];
         const float pz    = block.momentum_z[0];
-        const float m     = block.mass[0];
-        const float gamma = std::sqrt(1.0f + (px * px + py * py + pz * pz) / (m * m));
-        return (gamma - 1.0f) * m;
+        const float gamma = std::sqrt(1.0f + (px * px + py * py + pz * pz));
+        return (gamma - 1.0f);
     }
 };
 
@@ -67,9 +66,8 @@ TEST_F(RelativisticBorisPusherTest, VelocityCappingUnderContinuousAcceleration)
     const float px    = block.momentum_x[0];
     const float py    = block.momentum_y[0];
     const float pz    = block.momentum_z[0];
-    const float m     = block.mass[0];
-    const float gamma = std::sqrt(1.0f + (px * px + py * py + pz * pz) / (m * m));
-    const float vx    = px / (gamma * m);
+    const float gamma = std::sqrt(1.0f + (px * px + py * py + pz * pz));
+    const float vx    = px / gamma;
 
     EXPECT_LT(vx, 1.0f);
     EXPECT_GT(vx, 0.95f);
@@ -92,8 +90,8 @@ TEST_F(RelativisticBorisPusherTest, ZeroFieldMomentumConservation)
     EXPECT_NEAR(block.momentum_y[0], init_py, 1e-6f);
     EXPECT_NEAR(block.momentum_z[0], init_pz, 1e-6f);
 
-    const float gamma      = std::sqrt(1.0f + (init_px * init_px + init_py * init_py + init_pz * init_pz) / (block.mass[0] * block.mass[0]));
-    const float expected_x = init_x + dt * init_px / (gamma * block.mass[0]);
+    const float gamma      = std::sqrt(1.0f + (init_px * init_px + init_py * init_py + init_pz * init_pz));
+    const float expected_x = init_x + dt * init_px / gamma;
 
     EXPECT_NEAR(block.position_x[0], expected_x, 1e-6f);
 }
