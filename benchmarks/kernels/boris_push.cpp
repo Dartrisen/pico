@@ -39,6 +39,7 @@ void bench_boris_pusher_scaling()
                 pb.momentum_x[i] = 0.1f;
                 pb.momentum_y[i] = 0.05f;
                 pb.momentum_z[i] = 0.02f;
+                pb.inv_gamma[i]  = 1.0f;
             }
         }
 
@@ -68,7 +69,7 @@ void bench_boris_pusher_scaling()
                     scratch.By[i] = 0.001f;
                     scratch.Bz[i] = 0.001f;
                 }
-                kernels::pusher::BorisPusher<BS>::push_block(pb, scratch, dt);
+                kernels::pusher::BorisPusher<BS>::push_block(pb, scratch, dt, 1.0f);
             }
         }
 
@@ -90,7 +91,7 @@ void bench_boris_pusher_scaling()
                 }
                 // Automatically measures and accumulates ticks into Stage::Pusher
                 auto scope = profiler.time_stage(pico::perf::Stage::Pusher);
-                kernels::pusher::BorisPusher<BS>::push_block(pb, scratch, dt);
+                kernels::pusher::BorisPusher<BS>::push_block(pb, scratch, dt, 1.0f);
             }
         }
 
@@ -120,6 +121,7 @@ void run_cache_row(pico::ui::VerificationReport& report, size_t total_particles,
             pb.momentum_x[i] = 0.1f;
             pb.momentum_y[i] = 0.05f;
             pb.momentum_z[i] = 0.02f;
+            pb.inv_gamma[i]  = 1.0f;
         }
     }
 
@@ -148,7 +150,7 @@ void run_cache_row(pico::ui::VerificationReport& report, size_t total_particles,
                 scratch.Bz[i] = 0.001f;
             }
             auto scope = profiler.time_stage(pico::perf::Stage::Pusher);
-            kernels::pusher::BorisPusher<BS>::push_block(pb, scratch, dt);
+            kernels::pusher::BorisPusher<BS>::push_block(pb, scratch, dt, 1.0f);
         }
     }
 

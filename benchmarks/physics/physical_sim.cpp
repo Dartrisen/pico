@@ -73,7 +73,7 @@ int main()
     using Field     = pico::modules::field::YeeMaxwell<BS>;
     using Push      = pico::modules::pusher::RelativisticBorisPusher<BS>;
     using Gather    = pico::modules::gather::Gather<Shape, BS>;
-    using Dep       = pico::modules::deposit::OptEsirkepovDeposit<Shape, BS>;
+    using Dep       = pico::modules::deposit::EsirkepovDeposit<Shape, BS>;
     using BoundaryF = pico::modules::boundary::PeriodicBoundaryFieldHandler<BS>;
     using BoundaryP = pico::modules::boundary::PeriodicBoundaryParticleHandler<BS>;
     using Injector  = pico::modules::injector::PlaneWaveLaserInjector<BS>;
