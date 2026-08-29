@@ -22,37 +22,28 @@ When invoking any `add_species_*` method:
 
 **Pipeline Execution Loop (`advance_impl`)**
 
-In every time step `dt`, the engine executes five pipeline stages across OpenMP thread buffers:
+In every time step $\Delta t$, the engine executes five pipeline stages across OpenMP thread buffers:
 
 * **1. Sorting:** Reorders macro-particles into cell-contiguous SIMD blocks if spatial memory stride degrades.
 * **2. Boundary Fields:** Fills guard cells on `fields_`.
 * **3. Parallel Particle Loop:**
-    * **Gather:** Interpolates $E$ and $B$ fields from grid nodes to particle positions.
-    * **Push:** Advances particle momentum using $q/m$.
-    * **Particle Boundary:** Applies thermalizing or periodic boundary conditions.
-    * **Deposit:** Invokes `deposit_block` with `ppc` from `species_ppc_[s]` and the species
-    charge `q`. `pb.weight[i]` is the local density sample $n(x)$. `momentum_*` is
-    specific momentum $\mathbf{u}=\gamma\mathbf{v}$; the kernel forms
-    $\mathbf{v}=\mathbf{u}\,\mathtt{inv\_gamma}$. Mass is not used.
+    * **Gather:** Interpolates $E$ and $B$ fields from grid nodes to particle positions $x^n$.
+    * **Momentum Push:** Advances particle momentum $\mathbf{u}^{n-1/2} \to \mathbf{u}^{n+1/2}$ using $q/m$.
+    * **Relativistic Factor Update:** Recomputes $\mathtt{inv\_gamma}_i = 1/\sqrt{1 + \vert{}\mathbf{u}_i^{n+1/2}\vert{}^2}$ and updates velocity $\mathbf{v} = \mathbf{u} \cdot \mathtt{inv\_gamma}_i$.
+    * **Position Push:** Advances spatial position $x^{n+1} = x^n + v_x^{n+1/2}\Delta t$.
+    * **Particle Boundary:** Applies thermalizing or periodic boundary conditions on $x^{n+1}$ (recomputing $\mathtt{inv\_gamma}_i$ if particles reflect or thermalize).
+    * **Deposit:** Invokes `deposit_block` with `ppc` from `species_ppc_[s]` and species charge $q$. `pb.weight[i]` is local physical density $n(x)$.
+    * **Direct assignment (`SimpleDeposit` / `CurrentDeposit`).** Deposits $q\mathbf{v}$ at current position $x^{n+1/2}$. Half-node shape weights receive $J_x$; primal nodes receive $J_y, J_z$:
 
-   * **Direct assignment (`SimpleDeposit` / `CurrentDeposit`).** Deposits $q\mathbf{v}$ at the *current* position. Shape weights on half-nodes receive $J_x$; primal nodes receive $J_y,J_z$:
-    $$
-    J \mathrel{+}= \frac{q\,n}{\mathrm{ppc}\,\Delta x}\,W(x)\,\mathbf{v}.
-    $$
+    $$J \mathrel{+}= \frac{q\,n}{\mathrm{ppc}}\,W(x)\,\mathbf{v}$$
 
-    * **Charge-conserving (`EsirkepovDeposit`).** Reconstructs the previous position
-    $x^{n}=x^{n+1}-v_x\Delta t$ and differences shape weights $W(x^{n})$ and
-    $W(x^{n+1})$. Longitudinal current comes from continuity on the shape
-    (weights sum to 1), so $J_x$ has no extra $1/\Delta x$:
-    $$
-    J_{x,\,i+1/2} \mathrel{+}= \frac{q\,n}{\mathrm{ppc}\,\Delta t}
-    \sum_{k\le i}\bigl(W_k(x^{n})-W_k(x^{n+1})\bigr).
-    $$
-    * Transverse current is time-centered and matches the direct scheme:
-    $$
-    J_{y,z} \mathrel{+}= \frac{q\,n}{\mathrm{ppc}\,\Delta x}\,
-    \tfrac12\bigl(W(x^{n})+W(x^{n+1})\bigr)\,v_{y,z}.
-    $$
+    * **Charge-conserving (`EsirkepovDeposit`).** Evaluates shape weights at $x^n$ and $x^{n+1}$. Longitudinal current $J_x$ is derived from 1D charge continuity:
+
+    $$J_{x,\,i+1/2} \mathrel{+}= \frac{q\,n\,\Delta x}{\mathrm{ppc}\,\Delta t} \sum_{k\le i}\bigl(W_k(x^n) - W_k(x^{n+1})\bigr)$$
+
+    * Transverse current is time-centered and matches direct scaling:
+
+    $$J_{y,z} \mathrel{+}= \frac{q\,n}{\mathrm{ppc}}\,\tfrac12\bigl(W(x^n) + W(x^{n+1})\bigr)\,v_{y,z}$$
 
 * **4. Reduction:** Merges thread-local current buffers and folds boundaries.
 * **5. Field Solver:** Solves Maxwell's equations using the updated total grid current $J$.
