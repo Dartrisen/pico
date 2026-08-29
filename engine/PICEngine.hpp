@@ -290,25 +290,6 @@ public:
         ++step_counter_;
     }
 
-    [[nodiscard]] double compute_net_charge() const noexcept
-    {
-        double net_charge = 0.0;
-        for (const auto& species : species_)
-        {
-            double species_q = 0.0;
-            for (std::size_t b = 0; b < species.num_blocks(); ++b)
-            {
-                const auto& block = species.blocks()[b];
-                for (std::size_t i = 0; i < block.activeCount; ++i)
-                {
-                    species_q += block.weight[i];
-                }
-            }
-            net_charge += species_q * species.base_charge();
-        }
-        return net_charge;
-    }
-
     void enable_stage_profiling(bool enable) noexcept
     {
         enable_stage_profiling_ = enable;
@@ -443,7 +424,7 @@ private:
         particle_boundary_.apply(block, grid);
 
         const uint64_t t2 = enable_stage_profiling_ ? pico::perf::read_cpu_ticks() : 0;
-        deposit_.deposit_block(block, current, grid, dt_f, static_cast<float>(ppc), species.base_charge(), species.base_mass());
+        deposit_.deposit_block(block, current, grid, dt_f, static_cast<float>(ppc), species.base_charge());
 
         if (enable_stage_profiling_)
         {

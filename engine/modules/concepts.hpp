@@ -33,8 +33,8 @@ concept Gather = requires(T g, const ParticleBlock& block, const EMFields& field
 
 // Current / charge deposition concept
 template <class T, class Block, class FieldSystem>
-concept Deposit = requires(T d, const Block& block, FieldSystem& current, const Grid& grid, float dt, float ppc, float base_charge, float base_mass) {
-    { d.deposit_block(block, current, grid, dt, ppc, base_charge, base_mass) } -> std::same_as<void>;
+concept Deposit = requires(T d, const Block& block, FieldSystem& current, const Grid& grid, float dt, float ppc, float base_charge) {
+    { d.deposit_block(block, current, grid, dt, ppc, base_charge) } -> std::same_as<void>;
 };
 
 template <class B, class FieldsT, class SystemT>
