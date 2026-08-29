@@ -19,6 +19,7 @@
 #include <iostream>
 #include <memory>
 #include <numbers>
+#include <tuple>
 
 int main()
 {
@@ -46,15 +47,27 @@ int main()
     using EngineT = PICEngine<Field, Gather, Push, Dep, BoundaryF, BoundaryP, Injector, BS>;
 
     // 2. Engine Initialization & Particle Setup
-    EngineT engine_instance{grid, ppc};
+    EngineT engine_instance{grid};
 
     const double    L  = static_cast<double>(grid_cells) * dx;
     const double    k  = 2.0 * std::numbers::pi / L;
     constexpr float v0 = 0.05f;
 
-    auto& particles = engine_instance.particles();
-    particles.init_positions_uniform(grid);
-    particles.init_velocities_wave(v0, k, /*longitudinal_only=*/false);
+    auto uniform_density = [](double /*x*/) -> float { return 1.0f; };
+
+    // Wave velocity profile with 64-bit phase evaluation
+    auto wave_velocity = [v0, k](double x) -> std::tuple<float, float, float>
+    {
+        const double phase  = k * x;
+        const float  v_wave = static_cast<float>(v0 * std::sin(phase));
+        const float  v_y    = static_cast<float>(v0 * std::cos(phase));
+        return {v_wave, v_y, 0.0f};
+    };
+
+    // Register species via new engine profile API
+    engine_instance.add_species_profile(ppc, uniform_density, wave_velocity,
+                                        /*base_charge=*/-1.0f,
+                                        /*base_mass=*/1.0f);
 
     auto  wrapper          = std::make_unique<EngineWrapper<EngineT>>(std::move(engine_instance));
     auto* concrete_wrapper = wrapper.get();
@@ -69,7 +82,7 @@ int main()
             [&](int /*step*/)
             {
                 const auto m = EnergyDiag::evaluate(concrete_wrapper->engine());
-                energy_verifier.record_step(m.e_field_total(), m.e_kin());
+                energy_verifier.record_step(m.e_field_total(), m.e_kin_total());
             });
 
     // 5. Verification & Reporting
