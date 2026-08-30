@@ -1,0 +1,14 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "gather",
+    hdrs = [
+        "gather.hpp",
+    ],
+    deps = [
+        "//data/field:field",
+        "//data/grid:grid",
+        "//data/particle:particle",
+    ],
+    visibility = ["//visibility:public"],
+)

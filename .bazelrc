@@ -1,0 +1,78 @@
+# ============================================================
+# Platform selection
+# ============================================================
+
+build --enable_platform_specific_config
+
+
+# ============================================================
+# C++20
+# ============================================================
+
+build --cxxopt=-std=c++20
+build --host_cxxopt=-std=c++20
+
+
+# ============================================================
+# Release / performance
+# ============================================================
+
+build:opt --compilation_mode=opt
+build:opt --copt=-O3
+
+build:fast --compilation_mode=opt
+build:fast --copt=-O3
+build:fast --features=thin_lto
+
+
+# ============================================================
+# Native CPU optimization
+#
+# ONLY for binaries executed on the machine that compiled them.
+# ============================================================
+
+build:fast --copt=-march=native
+build:fast --copt=-mtune=native
+
+
+# ============================================================
+# Linux
+# ============================================================
+
+build:linux --copt=-fopenmp
+build:linux --linkopt=-fopenmp
+build:linux --features=-thin_lto
+
+
+# ============================================================
+# macOS
+# ============================================================
+
+# Apple Clang requires OpenMP to be passed through the
+# preprocessor driver.
+
+build:macos --macos_minimum_os=13.0
+build:macos --copt=-Xpreprocessor
+build:macos --copt=-fopenmp
+
+
+# ============================================================
+# Debug
+# ============================================================
+
+build:debug --compilation_mode=dbg
+build:debug --copt=-O0
+build:debug --copt=-g
+
+
+# ============================================================
+# Sanitizers
+# ============================================================
+
+build:asan --compilation_mode=dbg
+build:asan --copt=-fsanitize=address
+build:asan --linkopt=-fsanitize=address
+
+build:ubsan --compilation_mode=dbg
+build:ubsan --copt=-fsanitize=undefined
+build:ubsan --linkopt=-fsanitize=undefined

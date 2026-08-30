@@ -1,0 +1,16 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "boundary",
+    hdrs = [
+        "PeriodicFieldBoundary.hpp",
+        "PeriodicParticleBoundary.hpp",
+        "Thermalizing.hpp",
+        "SilverMuller.hpp",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//data/field:field",
+        "//data/grid:grid",
+    ],
+)

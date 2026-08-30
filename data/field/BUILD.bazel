@@ -2,12 +2,13 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
     name = "field",
-    hdrs = glob(["include/*.hpp", "src/*.inl"]),
+    hdrs = glob(["include/*.hpp"]),
+    textual_hdrs = glob(["src/*.inl"]),
     deps = [
+        "@openmp//:openmp",
         "//data/grid:grid"
     ],
     includes = ["include"],
     include_prefix = "",
-    copts = ["-O3", "-march=native"],
     visibility = ["//visibility:public"],
 )

@@ -4,8 +4,10 @@ cc_library(
     name = "pusher",
     hdrs = [
         "boris.hpp",
+        "relativistic_boris.hpp",
     ],
     deps = [
+        "@openmp//:openmp",
         "//data/field:field",
         "//data/particle:particle",
     ],

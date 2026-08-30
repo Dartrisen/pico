@@ -1,85 +1,104 @@
 #pragma once
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <array>
 
+namespace particle
+{
 
-namespace particle {
-
-enum class MomentumComp : uint8_t {
-    X = 0, Y = 1, Z = 2
+enum class MomentumComp : uint8_t
+{
+    X = 0,
+    Y = 1,
+    Z = 2
 };
 
 /**
  * @brief Cache-aligned, SIMD-friendly particle block using Structure-of-Arrays
- * @tparam BLOCK_SIZE Number of particles per block (must be multiple of 8)
+ * @tparam BLOCK_SIZE Number of particles per block (must be multiple of 16 for AVX-512)
  */
 template <size_t BLOCK_SIZE>
-struct ParticleBlock {
-    static_assert(BLOCK_SIZE % 8 == 0, "BLOCK_SIZE must be multiple of 8 for AVX");
+struct alignas(64) ParticleBlock
+{
+    static_assert(BLOCK_SIZE > 0, "BLOCK_SIZE must be greater than 0");
+    static_assert(BLOCK_SIZE % 16 == 0, "BLOCK_SIZE should be a multiple of 16 for 64-byte SIMD alignment");
 
-    static constexpr size_t size_x = BLOCK_SIZE;
+    // --- Spatial Coordinates ---
+    std::array<double, BLOCK_SIZE> position_x;
 
-    // Particle positions
-    alignas(64) std::array<float, size_x> position_x;
+    // --- Momentum Components ---
+    std::array<float, BLOCK_SIZE> momentum_x;
+    std::array<float, BLOCK_SIZE> momentum_y;
+    std::array<float, BLOCK_SIZE> momentum_z;
 
-    // Particle momenta
-    alignas(64) std::array<float, size_x> momentum_x;
-    alignas(64) std::array<float, size_x> momentum_y;
-    alignas(64) std::array<float, size_x> momentum_z;
+    // --- 1/gamma for deposit ---
+    std::array<float, BLOCK_SIZE> inv_gamma;
 
-    // Particle properties
-    alignas(64) std::array<float, size_x> weight;
-    alignas(64) std::array<float, size_x> mass;
-    alignas(64) std::array<float, size_x> charge;
+    // --- Particle Weight (w_i) ---
+    std::array<float, BLOCK_SIZE> weight;
 
-    uint16_t activeCount = 0;
-    uint32_t blockId = 0;
+    uint32_t activeCount{0};
+    uint32_t blockId{0};
 
     /**
      * @brief Check if block is full
      */
-    bool isFull() const { return activeCount >= BLOCK_SIZE; }
+    [[nodiscard]] bool isFull() const
+    {
+        return activeCount >= BLOCK_SIZE;
+    }
 
     /**
      * @brief Check if block is empty
      */
-    bool isEmpty() const { return activeCount == 0; }
+    [[nodiscard]] bool isEmpty() const
+    {
+        return activeCount == 0;
+    }
 
     /**
      * @brief Get available space in block
      */
-    size_t availableSpace() const { return BLOCK_SIZE - activeCount; }
+    [[nodiscard]] size_t availableSpace() const
+    {
+        return BLOCK_SIZE - activeCount;
+    }
 
     /**
      * @brief Remove particle (unsafely) at index by swapping with last active particle
      */
-    void removeParticle(size_t index) noexcept {
-        size_t last = --activeCount;
+    void removeParticle(size_t index) noexcept
+    {
+        const size_t last = --activeCount;
 
         position_x[index] = position_x[last];
         momentum_x[index] = momentum_x[last];
+        momentum_y[index] = momentum_y[last];
+        momentum_z[index] = momentum_z[last];
+        inv_gamma[index]  = inv_gamma[last];
         weight[index]     = weight[last];
-        mass[index]       = mass[last];
-        charge[index]     = charge[last];
     }
 
-    auto& component(MomentumComp c) noexcept {
-        switch (c) {
-            case MomentumComp::X: return momentum_x;
-            case MomentumComp::Y: return momentum_y;
-            case MomentumComp::Z: return momentum_z;
-        }
-        __builtin_unreachable();
+    template <MomentumComp C>
+    auto& component() noexcept
+    {
+        if constexpr (C == MomentumComp::X)
+            return momentum_x;
+        else if constexpr (C == MomentumComp::Y)
+            return momentum_y;
+        else
+            return momentum_z;
     }
 
-    const auto& component(MomentumComp c) const noexcept {
-        switch (c) {
-            case MomentumComp::X: return momentum_x;
-            case MomentumComp::Y: return momentum_y;
-            case MomentumComp::Z: return momentum_z;
-        }
-        __builtin_unreachable();
+    template <MomentumComp C>
+    const auto& component() const noexcept
+    {
+        if constexpr (C == MomentumComp::X)
+            return momentum_x;
+        else if constexpr (C == MomentumComp::Y)
+            return momentum_y;
+        else
+            return momentum_z;
     }
 };
 

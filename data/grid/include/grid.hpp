@@ -1,51 +1,37 @@
 #pragma once
-#include <stdexcept>
-#include <iostream>
 
-/**
- * @brief Represents a one-dimensional computational grid
- */
-struct Grid
+#include <cstddef>
+
+class Grid
 {
-public:
-    // Constructor
-    Grid(int nx_, double dx_) : nx(nx_), dx(dx_)
-    {
-        if (nx <= 0)
-            throw std::invalid_argument("nx must be positive");
-        if (dx <= 0.0)
-            throw std::invalid_argument("dx must be positive");
-    }
-
-    // Returns the index if valid, otherwise throws
-    int idx(int i) const
-    {
-        if (i < 0 || i >= nx)
-        {
-            throw std::out_of_range("Grid index out of bounds");
-        }
-        return i;
-    }
-
-    // Grid size
-    size_t size() const noexcept
-    {
-        return nx;
-    }
-
-    // Cell size
-    double cell_size() const noexcept
-    {
-        return dx;
-    }
-
-    // Get coordinate of cell center
-    double x(int i) const
-    {
-        return idx(i) * dx + 0.5 * dx;
-    }
-
 private:
-    int nx;
-    double dx;
+    std::size_t num_cells_;   // Physical cell count N
+    double      cell_size_;   // dx
+    std::size_t guard_cells_; // G (e.g., 2)
+
+public:
+    Grid(std::size_t num_cells, double cell_size, std::size_t guard_cells = 2) : num_cells_(num_cells), cell_size_(cell_size), guard_cells_(guard_cells) {}
+
+    [[nodiscard]] std::size_t physical_size() const noexcept
+    {
+        return num_cells_;
+    }
+    [[nodiscard]] std::size_t total_size() const noexcept
+    {
+        return num_cells_ + 2 * guard_cells_;
+    }
+    [[nodiscard]] std::size_t guard_cells() const noexcept
+    {
+        return guard_cells_;
+    }
+    [[nodiscard]] double cell_size() const noexcept
+    {
+        return cell_size_;
+    }
+
+    // Map physical index [0, N-1] to array storage index [G, N+G-1]
+    [[nodiscard]] std::size_t physical_to_buffer(std::size_t i) const noexcept
+    {
+        return i + guard_cells_;
+    }
 };

@@ -1,0 +1,13 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "sorter",
+    hdrs = [
+        "particle_sorter.hpp",
+    ],
+    deps = [
+        "//data/grid:grid",
+        "//data/particle:particle",
+    ],
+    visibility = ["//visibility:public"],
+)

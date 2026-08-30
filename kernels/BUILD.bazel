@@ -5,6 +5,10 @@ cc_library(
     deps = [
         "//kernels/field",
         "//kernels/pusher",
+        "//kernels/gather",
+        "//kernels/shapes",
+        "//kernels/deposit",
+        "//kernels/sorter",
     ],
     visibility = ["//visibility:public"],
 )

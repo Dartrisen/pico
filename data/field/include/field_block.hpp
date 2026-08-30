@@ -1,14 +1,20 @@
 #pragma once
+
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
-namespace field {
+namespace field
+{
 
 /**
- * @brief Enum for field components
+ * @brief Enum for field components 
  */
-enum class FieldComp : uint8_t {
-    X = 0, Y = 1, Z = 2
+enum class FieldComp : uint8_t
+{
+    X = 0,
+    Y = 1,
+    Z = 2
 };
 
 /**
@@ -16,27 +22,34 @@ enum class FieldComp : uint8_t {
  * @tparam BLOCK_SIZE Number of fields per block (must be multiple of 8)
  */
 template <size_t BLOCK_SIZE>
-struct FieldBlock {
-    std::array<float, BLOCK_SIZE> field_x;
-    std::array<float, BLOCK_SIZE> field_y;
-    std::array<float, BLOCK_SIZE> field_z;
+struct alignas(64) FieldBlock
+{
+    using ComponentArray = std::array<float, BLOCK_SIZE>;
 
-    auto& component(FieldComp c) noexcept {
-        switch (c) {
-            case FieldComp::X: return field_x;
-            case FieldComp::Y: return field_y;
-            case FieldComp::Z: return field_z;
-        }
-        __builtin_unreachable();
+    ComponentArray field_x;
+    ComponentArray field_y;
+    ComponentArray field_z;
+
+    template <FieldComp C>
+    ComponentArray& component() noexcept
+    {
+        if constexpr (C == FieldComp::X)
+            return field_x;
+        else if constexpr (C == FieldComp::Y)
+            return field_y;
+        else
+            return field_z;
     }
 
-    const auto& component(FieldComp c) const noexcept {
-        switch (c) {
-            case FieldComp::X: return field_x;
-            case FieldComp::Y: return field_y;
-            case FieldComp::Z: return field_z;
-        }
-        __builtin_unreachable();
+    template <FieldComp C>
+    const ComponentArray& component() const noexcept
+    {
+        if constexpr (C == FieldComp::X)
+            return field_x;
+        else if constexpr (C == FieldComp::Y)
+            return field_y;
+        else
+            return field_z;
     }
 };
 

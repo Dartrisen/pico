@@ -1,0 +1,25 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "diagnostics",
+    hdrs = [
+        "EnergyDiagnostic.hpp",
+        "FieldEnvelopeDiagnostic.hpp",
+        "CurrentDiagnostic.hpp",
+        "ConsoleVisualiser.hpp",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "verifiers",
+    hdrs = [
+        "PlasmaWaveVerifier.hpp",
+        "EnergyVerifier.hpp",
+        "CurrentVerifier.hpp",
+        "LandauVerifier.hpp",
+        "ParticleSortLocalityVerifier.hpp",
+        "WeibelVerifier.hpp",
+    ],
+    visibility = ["//visibility:public"],
+)

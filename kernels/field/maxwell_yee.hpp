@@ -1,39 +1,49 @@
 #pragma once
 
+#include "data/field/include/field_system.hpp"
+#include "data/grid/include/grid.hpp"
+
 namespace kernels::field
 {
 
-    template <size_t BLOCK_SIZE>
-    struct MaxwellYeeKernel
+template <std::size_t BLOCK_SIZE>
+struct YeeMaxwell
+{
+    static void advance_electric_field(FieldSystem<BLOCK_SIZE>& E, const FieldSystem<BLOCK_SIZE>& B, const FieldSystem<BLOCK_SIZE>& J, const Grid& grid, float dt)
     {
+        const std::size_t G   = grid.guard_cells();
+        const std::size_t N   = grid.physical_size();
+        const double      dxd = grid.cell_size();
 
-        static inline void update_B(
-            EMFields<BLOCK_SIZE> &fields,
-            const Grid &grid,
-            float dt)
+        // Loop over physical domain starting at guard cell offset G
+        for (std::size_t i = G; i < G + N; ++i)
         {
-            const float dx_inv = 1.f / grid.cell_size();
+            // Spatial derivatives of magnetic field components
+            const float dBz_dx = (B.field_z(i) - B.field_z(i - 1)) / dxd;
+            const float dBy_dx = (B.field_y(i) - B.field_y(i - 1)) / dxd;
 
-            // scalar loop version (keep for now)
-            for (size_t i = 0; i < grid.size() - 1; ++i)
-            {
-                fields.B[i] -= dt * dx_inv * (fields.E[i + 1] - fields.E[i]);
-            }
+            E.field_x(i) += -dt * J.field_x(i);
+            E.field_y(i) += dt * (-dBz_dx - J.field_y(i));
+            E.field_z(i) += dt * (dBy_dx - J.field_z(i));
         }
+    }
 
-        static inline void update_E(
-            EMFields<BLOCK_SIZE> &fields,
-            const FieldSystem<BLOCK_SIZE> &J,
-            const Grid &grid,
-            float dt)
+    static void advance_magnetic_field(FieldSystem<BLOCK_SIZE>& B, const FieldSystem<BLOCK_SIZE>& E, const Grid& grid, float dt)
+    {
+        const std::size_t G   = grid.guard_cells();
+        const std::size_t N   = grid.physical_size();
+        const double      dxd = grid.cell_size();
+
+        for (std::size_t i = G; i < G + N; ++i)
         {
-            const float dx_inv = 1.f / grid.cell_size();
+            const float dEy_dx = (E.field_y(i + 1) - E.field_y(i)) / dxd;
+            const float dEz_dx = (E.field_z(i + 1) - E.field_z(i)) / dxd;
 
-            for (size_t i = 1; i < grid.size() - 1; ++i)
-            {
-                fields.E[i] += dt * ((fields.B[i] - fields.B[i - 1]) * dx_inv - J[i]);
-            }
+            // Advance magnetic field components
+            B.field_z(i) -= dt * dEy_dx;
+            B.field_y(i) += dt * dEz_dx;
         }
-    };
+    }
+};
 
 } // namespace kernels::field

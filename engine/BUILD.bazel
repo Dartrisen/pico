@@ -1,3 +1,4 @@
+load("@hedron_compile_commands//:refresh_compile_commands.bzl", "refresh_compile_commands")
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
@@ -7,9 +8,21 @@ cc_library(
         "EngineBase.hpp",
     ],
     deps = [
+        "@openmp//:openmp",
         "//engine/modules",
         "//engine/modules/field",
         "//engine/modules/pusher",
+        "//engine/modules/gather",
+        "//engine/modules/deposit",
+        "//engine/modules/boundary",
+        "//engine/modules/injector",
+        "//engine/modules/sorter",
+        "//engine/perf:profiler",
     ],
     visibility = ["//visibility:public"],
+)
+
+refresh_compile_commands(
+    name = "refresh_compile_commands",
+    targets = [":engine"],
 )

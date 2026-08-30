@@ -1,0 +1,133 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+cc_binary(
+    name = "plasma_oscillation",
+    srcs = ["plasma_oscillation.cpp"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
+        "//app:ui_verification_report",
+    ],
+)
+
+cc_binary(
+    name = "energy_conservation",
+    srcs = ["energy_conservation.cpp"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
+        "//app:ui_verification_report",
+    ],
+)
+
+cc_binary(
+    name = "energy_conservation_full_linear",
+    srcs = ["energy_conservation_full_linear.cpp"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
+        "//app:ui_verification_report",
+    ],
+)
+
+cc_binary(
+    name = "energy_conservation_full_const",
+    srcs = ["energy_conservation_full_const.cpp"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
+        "//app:ui_verification_report",
+    ],
+)
+
+cc_binary(
+    name = "current_conservation",
+    srcs = ["current_conservation.cpp"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
+        "//app:ui_verification_report",
+    ],
+)
+
+cc_binary(
+    name = "laser_propagation",
+    srcs = ["laser_propagation.cpp"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
+        "//app:ui_verification_report",
+    ],
+)
+
+cc_binary(
+    name = "heavy_workload",
+    srcs = ["heavy_workload.cpp"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
+        "//app:ui_verification_report",
+    ],
+)
+
+cc_binary(
+    name = "landau_damping",
+    srcs = ["landau_damping.cpp"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
+        "//app:ui_verification_report",
+    ],
+)
+
+cc_binary(
+    name = "particle_sort_locality",
+    srcs = ["particle_sort_locality.cpp"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
+        "//app:ui_verification_report",
+    ],
+)
+
+cc_binary(
+    name = "weibel_instability",
+    srcs = ["weibel_instability.cpp"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
+        "//app:ui_verification_report",
+    ],
+)
+
+cc_binary(
+    name = "physical_sim",
+    srcs = ["physical_sim.cpp"],
+    deps = [
+        "//app:app_lib",
+        "//engine",
+        "//engine/modules/diagnostics:verifiers",
+        "//engine/modules/diagnostics:diagnostics",
+        "//app:ui_verification_report",
+    ],
+)

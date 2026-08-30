@@ -4,9 +4,29 @@ load("@hedron_compile_commands//:refresh_compile_commands.bzl", "refresh_compile
 cc_library(
     name = "app_lib",
     hdrs = glob(["*.hpp"]),
-    deps = ["//engine"],
+    deps = [
+        "//engine",
+        "//kernels/shapes",
+    ],
     include_prefix = "",
-    copts = ["-O3", "-march=native"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "ui_colors",
+    hdrs = [
+        "Colors.hpp"
+    ],
+    include_prefix = "",
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "ui_verification_report",
+    hdrs = [
+        "VerificationReport.hpp",
+    ],
+    deps = ["//app:ui_colors"],
     visibility = ["//visibility:public"],
 )
 
@@ -17,7 +37,6 @@ cc_binary(
         ":app_lib",
         "//engine",
     ],
-    copts = ["-O3", "-march=native", "-std=c++20"],
     visibility = ["//visibility:public"],
 )
 
